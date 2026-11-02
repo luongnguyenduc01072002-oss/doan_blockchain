@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ethers } from 'ethers'
 import './App.css'
-
+const CONTRACT_ADDRESS = "0xa131AD247055FD2e2aA8b156A11bdEc81b9eAD95"
 function App() {
   const [account, setAccount] = useState('')
 
