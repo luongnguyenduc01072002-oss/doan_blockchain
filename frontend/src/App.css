@@ -1,26 +1,140 @@
+/* =========================================
+   THIẾT LẬP CƠ BẢN (RESET)
+========================================= */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
 body {
-  background-color: #f4f7f6;
+  /* Màu nền gradient xanh nhạt hiện đại */
+  background: linear-gradient(135deg, #f0f4f8 0%, #e0e8f0 100%);
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #333;
+  min-height: 100vh;
 }
+
+/* Ép khung chứa Vite mở rộng tối đa */
+#root {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+/* =========================================
+   KHUNG ỨNG DỤNG CHÍNH
+========================================= */
 .App {
-  max-width: 800px;
+  max-width: 850px;
+  width: 100%;
   margin: 0 auto;
-  padding: 20px;
+}
+
+/* Tiêu đề */
+h1 {
   text-align: center;
+  color: #1a237e;
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 35px;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
 }
+
+h2 {
+  font-size: 1.4rem;
+  color: #2c3e50;
+  margin-bottom: 15px;
+  border-bottom: 2px solid #eef2f5;
+  padding-bottom: 12px;
+  font-weight: 600;
+}
+
+h3 {
+  font-size: 1.2rem;
+  color: #555;
+  margin-bottom: 15px;
+}
+
+/* =========================================
+   THẺ HIỂN THỊ (CARDS)
+========================================= */
 .card {
-  background: white !important;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-  transition: 0.3s;
+  background: #ffffff !important;
+  border-radius: 16px;
+  padding: 30px !important;
+  margin-bottom: 30px !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
+
 .card:hover {
-  box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+  transform: translateY(-3px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1) !important;
 }
+
+.card p {
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+  line-height: 1.6;
+}
+
+strong {
+  color: #1a237e;
+  font-weight: 600;
+}
+
+/* =========================================
+   Ô NHẬP LIỆU (INPUTS)
+========================================= */
+input[type="text"],
+input[type="number"] {
+  width: 100%;
+  padding: 14px 18px !important;
+  margin-bottom: 15px;
+  border: 2px solid #e0e6ed !important;
+  border-radius: 10px !important;
+  font-size: 16px !important;
+  background-color: #f8fafc;
+  transition: all 0.3s ease;
+  outline: none;
+  color: #333;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus {
+  border-color: #2196f3 !important;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 4px rgba(33, 150, 243, 0.15);
+}
+
+input::placeholder {
+  color: #a0aec0;
+}
+
+/* =========================================
+   NÚT BẤM (BUTTONS)
+========================================= */
 button {
-  font-weight: bold;
-  transition: 0.2s;
+  font-family: inherit;
+  font-weight: 600 !important;
+  border-radius: 10px !important;
+  transition: all 0.2s ease !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  letter-spacing: 0.5px;
 }
+
 button:hover {
-  opacity: 0.8;
-  transform: scale(1.05);
+  filter: brightness(1.1);
+  transform: scale(1.03) !important;
+  box-shadow: 0 6px 15px rgba(0,0,0,0.15);
+}
+
+button:active {
+  transform: scale(0.97) !important;
 }
