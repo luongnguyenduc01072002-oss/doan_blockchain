@@ -1,121 +1,63 @@
 import { useState } from 'react'
-import heroImg from './assets/hero.png'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
 import './App.css'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [account, setAccount] = useState('')
+
+  // Hàm mô phỏng kết nối ví (Thành viên 3 sẽ thay bằng code kết nối MetaMask thật sau)
+  const connectWallet = () => {
+    setAccount('0x123456789... (Ví MetaMask ảo)')
+  }
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
+    <div className="App">
+      <h1>Hệ Thống Giao Dịch Đảm Bảo (Escrow)</h1>
+      
+      {/* Khu vực 1: Kết nối ví */}
+      <div className="card" style={{ backgroundColor: '#f0f4f8', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
+        <h2>1. Trạng Thái Kết Nối</h2>
+        {!account ? (
+          <button onClick={connectWallet} style={{ backgroundColor: '#ff9800', color: 'white', padding: '10px 20px', fontSize: '16px', cursor: 'pointer', border: 'none', borderRadius: '5px' }}>
+            🦊 Kết nối ví MetaMask
+          </button>
+        ) : (
+          <p style={{ color: 'green', fontSize: '18px' }}>
+            ✅ Đã kết nối ví: <strong>{account}</strong>
           </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+        )}
+      </div>
 
-      <div className="ticks"></div>
+      {/* Khu vực 2: Thông tin Két sắt */}
+      <div className="card" style={{ backgroundColor: '#e3f2fd', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
+        <h2>2. Thông Tin Két Sắt (Smart Contract)</h2>
+        <p>Trạng thái hiện tại: <strong>Đang chờ nạp tiền (AWAITING_PAYMENT)</strong></p>
+        <p>Số dư đang khóa: <strong>0 ETH</strong></p>
+      </div>
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
+      {/* Khu vực 3: Bảng điều khiển mua bán */}
+      <div className="card" style={{ backgroundColor: '#e8f5e9', padding: '20px', borderRadius: '10px' }}>
+        <h2>3. Bảng Điều Khiển</h2>
+        
+        <div style={{ marginBottom: '20px' }}>
+          <h3>Dành cho Người Mua</h3>
+          <input 
+            type="number" 
+            placeholder="Nhập số ETH..." 
+            style={{ padding: '10px', fontSize: '16px', marginRight: '10px', width: '150px' }}
+          />
+          <button style={{ backgroundColor: '#2196f3', color: 'white', padding: '10px 20px', fontSize: '16px', cursor: 'pointer', border: 'none', borderRadius: '5px' }}>
+            Nạp tiền & Khóa vào Két
+          </button>
         </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+        <div>
+          <button style={{ backgroundColor: '#4caf50', color: 'white', padding: '10px 20px', fontSize: '16px', cursor: 'pointer', border: 'none', borderRadius: '5px' }}>
+            📦 Xác nhận đã nhận hàng (Giải ngân)
+          </button>
+        </div>
+      </div>
+      
+    </div>
   )
 }
 
