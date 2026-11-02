@@ -3,7 +3,8 @@ import { ethers } from 'ethers'
 import EscrowABI from './EscrowABI.json'
 import './App.css'
 
-const CONTRACT_ADDRESS = "0xa131AD247055FD2e2aA8b156A11bdEc81b9eAD95"
+// Địa chỉ Contract mới do T1 cập nhật
+const CONTRACT_ADDRESS = "0xa131AD247055FD2e2aA8b156A11bdEc81b9eAD95" 
 
 function App() {
   const [account, setAccount] = useState('')
@@ -12,19 +13,15 @@ function App() {
   const [status, setStatus] = useState('Đang kết nối mạng lưới...')
   const [balance, setBalance] = useState('0')
 
-  // Hàm tự động đọc số dư thật từ Smart Contract trên Blockchain
+  // Đọc dữ liệu từ Blockchain
   const fetchContractData = async () => {
     if (window.ethereum) {
       try {
-        // Chỉ cần Provider để đọc dữ liệu (Read-only), không cần Signer
         const provider = new ethers.BrowserProvider(window.ethereum);
-        
-        // Truy vấn số dư ETH thực tế đang bị khóa trong địa chỉ Hợp đồng
         const contractBalance = await provider.getBalance(CONTRACT_ADDRESS);
         const balanceInEther = ethers.formatEther(contractBalance);
         setBalance(balanceInEther);
 
-        // Cập nhật trạng thái hiển thị dựa trên số dư
         if (parseFloat(balanceInEther) > 0) {
           setStatus('Đã nạp tiền, đang chờ giao hàng (AWAITING_DELIVERY)');
         } else {
@@ -37,14 +34,13 @@ function App() {
     }
   }
 
-  // Tự động gọi hàm đọc dữ liệu mỗi khi tài khoản thay đổi hoặc vừa kết nối ví
   useEffect(() => {
     if (account) {
       fetchContractData();
     }
   }, [account]);
 
-  // Hàm kết nối ví MetaMask
+  // Kết nối MetaMask
   const connectWallet = async () => {
     if (window.ethereum) {
       try {
@@ -59,30 +55,24 @@ function App() {
     }
   }
 
-  // Hàm nạp tiền vào Smart Contract
+  // Nạp tiền vào Két sắt (Đã sửa lại gọi đúng hàm depositPayment và bỏ tham số)
   const handleDeposit = async () => {
     if (!window.ethereum) return alert("Vui lòng cài đặt MetaMask!");
     if (!account) return alert("Vui lòng kết nối ví trước!");
-    if (!sellerAddress || !depositAmount) return alert("Vui lòng nhập đủ địa chỉ người bán và số ETH!");
+    if (!depositAmount) return alert("Vui lòng nhập số ETH cần khóa!");
 
     try {
       const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const escrowContract = new ethers.Contract(CONTRACT_ADDRESS, EscrowABI, signer);
-
       const amountInWei = ethers.parseEther(depositAmount);
 
-      // Gọi hàm nạp tiền (deposit)
-      const tx = await escrowContract.deposit(sellerAddress, { value: amountInWei });
-      
+      // Gọi chuẩn xác hàm depositPayment() trong Solidity
+      const tx = await escrowContract.depositPayment({ value: amountInWei });
       alert("Giao dịch đang được đẩy lên Blockchain... Vui lòng chờ xác nhận!");
-      
-      // Chờ mạng lưới Blockchain xác nhận
       await tx.wait();
       
       alert("Nạp tiền và Khóa Két thành công!");
-      
-      // Gọi lại hàm cập nhật để web tải lại số dư mới nhất lập tức
       fetchContractData(); 
 
     } catch (error) {
@@ -91,7 +81,7 @@ function App() {
     }
   }
 
-  // Hàm xác nhận nhận hàng và giải ngân cho người bán
+  // Giải ngân cho người bán
   const handleConfirmDelivery = async () => {
     if (!window.ethereum) return alert("Vui lòng cài đặt MetaMask!");
     if (!account) return alert("Vui lòng kết nối ví trước!");
@@ -101,15 +91,11 @@ function App() {
       const signer = await provider.getSigner();
       const escrowContract = new ethers.Contract(CONTRACT_ADDRESS, EscrowABI, signer);
 
-      // Gọi hàm giải ngân (confirmDelivery)
       const tx = await escrowContract.confirmDelivery();
-      
       alert("Đang xử lý lệnh giải ngân... Vui lòng chờ!");
       await tx.wait();
       
       alert("Giải ngân thành công! Tiền đã được chuyển vào ví người bán.");
-      
-      // Cập nhật lại số dư két sắt (sẽ về 0)
       fetchContractData();
 
     } catch (error) {
@@ -118,33 +104,52 @@ function App() {
     }
   }
 
+  // Hoàn tiền (Đã sửa lại gọi đúng hàm refundBuyer)
+  const handleRefund = async () => {
+    if (!window.ethereum) return alert("Vui lòng cài đặt MetaMask!");
+    if (!account) return alert("Vui lòng kết nối ví trước!");
+
+    try {
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const escrowContract = new ethers.Contract(CONTRACT_ADDRESS, EscrowABI, signer);
+
+      // Gọi chuẩn xác hàm refundBuyer() trong Solidity
+      const tx = await escrowContract.refundBuyer();
+      alert("Đang xử lý lệnh hoàn tiền... Vui lòng chờ!");
+      await tx.wait();
+      
+      alert("Hoàn tiền thành công! ETH đã được trả lại ví của bạn.");
+      fetchContractData(); 
+
+    } catch (error) {
+      console.error("Lỗi khi hoàn tiền:", error);
+      alert("Giao dịch thất bại! (Lưu ý: Chỉ Admin hoặc Người bán mới có quyền ấn nút này).");
+    }
+  }
+
   return (
     <div className="App">
       <h1>Hệ Thống Giao Dịch Đảm Bảo (Escrow)</h1>
       
-      {/* Khu vực 1: Kết nối ví */}
-      <div className="card" style={{ backgroundColor: '#f0f4f8', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
+      <div className="card" style={{ backgroundColor: '#f0f4f8' }}>
         <h2>1. Trạng Thái Kết Nối</h2>
         {!account ? (
-          <button onClick={connectWallet} style={{ backgroundColor: '#ff9800', color: 'white', padding: '10px 20px', fontSize: '16px', cursor: 'pointer', border: 'none', borderRadius: '5px' }}>
+          <button onClick={connectWallet} style={{ backgroundColor: '#ff9800', color: 'white', padding: '10px 20px', fontSize: '16px', border: 'none' }}>
             🦊 Kết nối ví MetaMask
           </button>
         ) : (
-          <p style={{ color: 'green', fontSize: '18px' }}>
-            ✅ Đã kết nối ví: <strong>{account}</strong>
-          </p>
+          <p style={{ color: 'green', fontSize: '18px' }}>✅ Đã kết nối ví: <strong>{account}</strong></p>
         )}
       </div>
 
-      {/* Khu vực 2: Thông tin Két sắt */}
-      <div className="card" style={{ backgroundColor: '#e3f2fd', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
+      <div className="card" style={{ backgroundColor: '#e3f2fd' }}>
         <h2>2. Thông Tin Két Sắt (Smart Contract)</h2>
         <p>Trạng thái hiện tại: <strong>{status}</strong></p>
         <p>Số dư đang khóa: <strong>{balance} ETH</strong></p>
       </div>
 
-      {/* Khu vực 3: Bảng điều khiển mua bán */}
-      <div className="card" style={{ backgroundColor: '#e8f5e9', padding: '20px', borderRadius: '10px' }}>
+      <div className="card" style={{ backgroundColor: '#e8f5e9' }}>
         <h2>3. Bảng Điều Khiển</h2>
         
         <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
@@ -152,10 +157,9 @@ function App() {
           
           <input 
             type="text" 
-            placeholder="Nhập địa chỉ ví người bán (0x...)" 
+            placeholder="Nhập địa chỉ ví người bán (chỉ để hiển thị UI)" 
             value={sellerAddress}
             onChange={(e) => setSellerAddress(e.target.value)}
-            style={{ padding: '10px', fontSize: '16px', width: '350px', borderRadius: '5px', border: '1px solid #ccc' }}
           />
 
           <input 
@@ -163,22 +167,20 @@ function App() {
             placeholder="Nhập số ETH cần khóa..." 
             value={depositAmount}
             onChange={(e) => setDepositAmount(e.target.value)}
-            style={{ padding: '10px', fontSize: '16px', width: '350px', borderRadius: '5px', border: '1px solid #ccc' }}
           />
 
-          <button 
-            onClick={handleDeposit}
-            style={{ backgroundColor: '#2196f3', color: 'white', padding: '12px 20px', fontSize: '16px', cursor: 'pointer', border: 'none', borderRadius: '5px', width: '370px', fontWeight: 'bold' }}>
+          <button onClick={handleDeposit} style={{ backgroundColor: '#2196f3', color: 'white', padding: '12px 20px', width: '100%', fontSize: '16px', border: 'none' }}>
             💰 Nạp tiền & Khóa vào Két
           </button>
         </div>
 
-        <div style={{ borderTop: '2px dashed #4caf50', paddingTop: '20px', marginTop: '20px' }}>
-          <h3>Dành cho Người Mua (Sau Khi Nhận Hàng)</h3>
-          <button 
-            onClick={handleConfirmDelivery}
-            style={{ backgroundColor: '#4caf50', color: 'white', padding: '12px 20px', fontSize: '16px', cursor: 'pointer', border: 'none', borderRadius: '5px', fontWeight: 'bold' }}>
-            📦 Xác nhận đã nhận hàng (Giải ngân cho người bán)
+        <div style={{ borderTop: '2px dashed #4caf50', paddingTop: '20px', marginTop: '20px', display: 'flex', gap: '15px' }}>
+          <button onClick={handleConfirmDelivery} style={{ backgroundColor: '#4caf50', color: 'white', padding: '12px 20px', fontSize: '16px', border: 'none', flex: 1 }}>
+            📦 Đã nhận hàng (Giải ngân)
+          </button>
+
+          <button onClick={handleRefund} style={{ backgroundColor: '#f44336', color: 'white', padding: '12px 20px', fontSize: '16px', border: 'none', flex: 1 }}>
+            ❌ Hủy & Hoàn tiền
           </button>
         </div>
       </div>
