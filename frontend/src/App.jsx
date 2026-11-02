@@ -1,12 +1,26 @@
 import { useState } from 'react'
+import { ethers } from 'ethers'
 import './App.css'
 
 function App() {
   const [account, setAccount] = useState('')
 
   // Hàm mô phỏng kết nối ví (Thành viên 3 sẽ thay bằng code kết nối MetaMask thật sau)
-  const connectWallet = () => {
-    setAccount('0x123456789... (Ví MetaMask ảo)')
+  
+  // Hàm kết nối ví MetaMask thật (Thành viên 3 code)
+  const connectWallet = async () => {
+    if (window.ethereum) {
+      try {
+        // Yêu cầu MetaMask mở popup đăng nhập
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+        setAccount(accounts[0]); // Lưu địa chỉ ví vào State
+      } catch (error) {
+        console.error("Lỗi kết nối ví:", error);
+        alert("Bạn đã từ chối kết nối ví!");
+      }
+    } else {
+      alert("Vui lòng cài đặt tiện ích MetaMask trên trình duyệt!");
+    }
   }
 
   return (
