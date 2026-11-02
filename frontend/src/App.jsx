@@ -26,7 +26,6 @@ function App() {
   return (
     <div className="App">
       <h1>Hệ Thống Giao Dịch Đảm Bảo (Escrow)</h1>
-      
       {/* Khu vực 1: Kết nối ví */}
       <div className="card" style={{ backgroundColor: '#f0f4f8', padding: '20px', borderRadius: '10px', marginBottom: '20px' }}>
         <h2>1. Trạng Thái Kết Nối</h2>
