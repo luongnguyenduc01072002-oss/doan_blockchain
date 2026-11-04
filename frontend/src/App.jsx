@@ -3,7 +3,6 @@ import { ethers } from 'ethers'
 import EscrowABI from './EscrowABI.json'
 import './App.css'
 
-// Địa chỉ Contract mới do T1 cập nhật
 const CONTRACT_ADDRESS = "0xa131AD247055FD2e2aA8b156A11bdEc81b9eAD95" 
 
 function App() {
@@ -12,6 +11,39 @@ function App() {
   const [depositAmount, setDepositAmount] = useState('')
   const [status, setStatus] = useState('Đang kết nối mạng lưới...')
   const [balance, setBalance] = useState('0')
+
+  // Danh sách sản phẩm mẫu (Mô phỏng gian hàng)
+  const products = [
+    {
+      id: 1,
+      name: "Laptop Gaming MSI",
+      price: "0.01",
+      image: "https://images.unsplash.com/photo-1593640408182-31c70c8268f5?w=400&q=80",
+      seller: "0x77f73541b69F69386401AadB88B248aA2" // Ví dụ địa chỉ người bán 1
+    },
+    {
+      id: 2,
+      name: "Điện thoại iPhone 15",
+      price: "0.005",
+      image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400&q=80",
+      seller: "0x1234567890abcdef1234567890abcdef12345678" // Ví dụ địa chỉ người bán 2
+    },
+    {
+      id: 3,
+      name: "Đồng hồ thông minh",
+      price: "0.002",
+      image: "https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=400&q=80",
+      seller: "0x9876543210fedcba9876543210fedcba98765432" // Ví dụ địa chỉ người bán 3
+    }
+  ];
+
+  // Hàm tự động điền thông tin khi khách chọn mua hàng
+  const handleSelectProduct = (product) => {
+    setSellerAddress(product.seller);
+    setDepositAmount(product.price);
+    // Cuộn trang xuống khu vực thanh toán
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+  }
 
   // Đọc dữ liệu từ Blockchain
   const fetchContractData = async () => {
@@ -55,7 +87,7 @@ function App() {
     }
   }
 
-  // Nạp tiền vào Két sắt (Đã sửa lại gọi đúng hàm depositPayment và bỏ tham số)
+  // Nạp tiền vào Két sắt
   const handleDeposit = async () => {
     if (!window.ethereum) return alert("Vui lòng cài đặt MetaMask!");
     if (!account) return alert("Vui lòng kết nối ví trước!");
@@ -67,7 +99,6 @@ function App() {
       const escrowContract = new ethers.Contract(CONTRACT_ADDRESS, EscrowABI, signer);
       const amountInWei = ethers.parseEther(depositAmount);
 
-      // Gọi chuẩn xác hàm depositPayment() trong Solidity
       const tx = await escrowContract.depositPayment({ value: amountInWei });
       alert("Giao dịch đang được đẩy lên Blockchain... Vui lòng chờ xác nhận!");
       await tx.wait();
@@ -104,7 +135,7 @@ function App() {
     }
   }
 
-  // Hoàn tiền (Đã sửa lại gọi đúng hàm refundBuyer)
+  // Hoàn tiền 
   const handleRefund = async () => {
     if (!window.ethereum) return alert("Vui lòng cài đặt MetaMask!");
     if (!account) return alert("Vui lòng kết nối ví trước!");
@@ -114,7 +145,6 @@ function App() {
       const signer = await provider.getSigner();
       const escrowContract = new ethers.Contract(CONTRACT_ADDRESS, EscrowABI, signer);
 
-      // Gọi chuẩn xác hàm refundBuyer() trong Solidity
       const tx = await escrowContract.refundBuyer();
       alert("Đang xử lý lệnh hoàn tiền... Vui lòng chờ!");
       await tx.wait();
@@ -130,8 +160,27 @@ function App() {
 
   return (
     <div className="App">
-      <h1>Hệ Thống Giao Dịch Đảm Bảo (Escrow)</h1>
+      <h1>Chợ Điện Tử Web3 (Escrow)</h1>
       
+      {/* KHU VỰC MỚI: GIAN HÀNG SẢN PHẨM */}
+      <div className="card" style={{ backgroundColor: '#fff', border: '1px solid #e0e6ed' }}>
+        <h2>🛒 Gian Hàng Sản Phẩm</h2>
+        <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '20px' }}>
+          {products.map((product) => (
+            <div key={product.id} style={{ border: '1px solid #e0e6ed', borderRadius: '10px', padding: '15px', width: '220px', textAlign: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+              <img src={product.image} alt={product.name} style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '8px', marginBottom: '10px' }} />
+              <h3 style={{ fontSize: '16px', color: '#333', marginBottom: '5px' }}>{product.name}</h3>
+              <p style={{ color: '#2196f3', fontWeight: 'bold', fontSize: '18px', marginBottom: '15px' }}>{product.price} ETH</p>
+              <button 
+                onClick={() => handleSelectProduct(product)}
+                style={{ backgroundColor: '#ff9800', color: 'white', padding: '8px 15px', fontSize: '14px', border: 'none', borderRadius: '5px', width: '100%' }}>
+                🛒 Mua Ngay
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="card" style={{ backgroundColor: '#f0f4f8' }}>
         <h2>1. Trạng Thái Kết Nối</h2>
         {!account ? (
@@ -150,21 +199,21 @@ function App() {
       </div>
 
       <div className="card" style={{ backgroundColor: '#e8f5e9' }}>
-        <h2>3. Bảng Điều Khiển</h2>
+        <h2>3. Bảng Điều Khiển Thanh Toán</h2>
         
         <div style={{ marginBottom: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px' }}>
           <h3>Dành cho Người Mua (Tạo Giao Dịch)</h3>
           
           <input 
             type="text" 
-            placeholder="Nhập địa chỉ ví người bán (chỉ để hiển thị UI)" 
+            placeholder="Địa chỉ ví người bán (Chọn sản phẩm ở trên để tự điền)" 
             value={sellerAddress}
             onChange={(e) => setSellerAddress(e.target.value)}
           />
 
           <input 
             type="number" 
-            placeholder="Nhập số ETH cần khóa..." 
+            placeholder="Số ETH cần khóa (Chọn sản phẩm ở trên để tự điền)" 
             value={depositAmount}
             onChange={(e) => setDepositAmount(e.target.value)}
           />
