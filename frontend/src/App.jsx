@@ -3,7 +3,11 @@ import { ethers } from 'ethers'
 import EscrowABI from './EscrowABI.json'
 import './App.css'
 
+// 1. ĐỊA CHỈ SMART CONTRACT
 const CONTRACT_ADDRESS = "0xa131AD247055FD2e2aA8b156A11bdEc81b9eAD95" 
+
+// 2. ĐỊA CHỈ VÍ ADMIN (Trưởng nhóm hãy sửa chuỗi 0x... bên dưới thành địa chỉ ví MetaMask của chính bạn)
+const ADMIN_ADDRESS = "git add .".toLowerCase()
 
 function App() {
   const [account, setAccount] = useState('')
@@ -12,36 +16,64 @@ function App() {
   const [status, setStatus] = useState('Đang kết nối mạng lưới...')
   const [balance, setBalance] = useState('0')
 
-  // Danh sách sản phẩm mẫu (Mô phỏng gian hàng)
-  const products = [
-    {
-      id: 1,
-      name: "Laptop Gaming MSI",
-      price: "0.01",
-      image: "https://images.unsplash.com/photo-1593640408182-31c70c8268f5?w=400&q=80",
-      seller: "0x77f73541b69F69386401AadB88B248aA2" // Ví dụ địa chỉ người bán 1
-    },
-    {
-      id: 2,
-      name: "Điện thoại iPhone 15",
-      price: "0.005",
-      image: "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?w=400&q=80",
-      seller: "0x1234567890abcdef1234567890abcdef12345678" // Ví dụ địa chỉ người bán 2
-    },
-    {
-      id: 3,
-      name: "Đồng hồ thông minh",
-      price: "0.002",
-      image: "https://images.unsplash.com/photo-1546868871-7041f2a55e12?w=400&q=80",
-      seller: "0x9876543210fedcba9876543210fedcba98765432" // Ví dụ địa chỉ người bán 3
+  // === QUẢN LÝ DỮ LIỆU SẢN PHẨM BẰNG LOCALSTORAGE ===
+  // Khởi tạo mảng sản phẩm: Lấy từ LocalStorage, nếu trống thì tạo 1 sản phẩm mẫu
+  const [products, setProducts] = useState(() => {
+    const savedProducts = localStorage.getItem('web3_marketplace_products');
+    if (savedProducts) {
+      return JSON.parse(savedProducts);
     }
-  ];
+    return [
+      {
+        id: 1,
+        name: "Laptop Gaming Hàng Hiệu",
+        price: "0.01",
+        image: "https://images.unsplash.com/photo-1593640408182-31c70c8268f5?w=400&q=80",
+        seller: "0x77f73541b69F69386401AadB88B248aA2"
+      }
+    ];
+  });
 
-  // Hàm tự động điền thông tin khi khách chọn mua hàng
+  // State quản lý Form thêm sản phẩm (Dành cho Admin)
+  const [newProdName, setNewProdName] = useState('');
+  const [newProdPrice, setNewProdPrice] = useState('');
+  const [newProdImage, setNewProdImage] = useState('');
+  const [newProdSeller, setNewProdSeller] = useState('');
+
+  // Tự động lưu mảng products vào LocalStorage mỗi khi có thay đổi
+  useEffect(() => {
+    localStorage.setItem('web3_marketplace_products', JSON.stringify(products));
+  }, [products]);
+
+  // Hàm thêm sản phẩm mới
+  const handleAddProduct = () => {
+    if (!newProdName || !newProdPrice || !newProdImage || !newProdSeller) {
+      return alert("Vui lòng nhập đầy đủ thông tin sản phẩm!");
+    }
+    
+    const newProduct = {
+      id: Date.now(), // Tạo ID ngẫu nhiên bằng thời gian thực
+      name: newProdName,
+      price: newProdPrice,
+      image: newProdImage,
+      seller: newProdSeller
+    };
+
+    setProducts([...products, newProduct]); // Thêm vào danh sách
+    
+    // Xóa trắng form sau khi thêm
+    setNewProdName('');
+    setNewProdPrice('');
+    setNewProdImage('');
+    setNewProdSeller('');
+    alert("Đã thêm sản phẩm lên Chợ Web3 thành công!");
+  }
+  // ====================================================
+
+  // Tự động điền thông tin khi khách bấm Mua Ngay
   const handleSelectProduct = (product) => {
     setSellerAddress(product.seller);
     setDepositAmount(product.price);
-    // Cuộn trang xuống khu vực thanh toán
     window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
   }
 
@@ -77,7 +109,7 @@ function App() {
     if (window.ethereum) {
       try {
         const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-        setAccount(accounts[0]);
+        setAccount(accounts[0].toLowerCase()); // Đưa về chữ thường để so sánh Admin chính xác
       } catch (error) {
         console.error("Lỗi kết nối ví:", error);
         alert("Bạn đã từ chối kết nối ví!");
@@ -135,7 +167,7 @@ function App() {
     }
   }
 
-  // Hoàn tiền 
+  // Hoàn tiền
   const handleRefund = async () => {
     if (!window.ethereum) return alert("Vui lòng cài đặt MetaMask!");
     if (!account) return alert("Vui lòng kết nối ví trước!");
@@ -162,25 +194,6 @@ function App() {
     <div className="App">
       <h1>Chợ Điện Tử Web3 (Escrow)</h1>
       
-      {/* KHU VỰC MỚI: GIAN HÀNG SẢN PHẨM */}
-      <div className="card" style={{ backgroundColor: '#fff', border: '1px solid #e0e6ed' }}>
-        <h2>🛒 Gian Hàng Sản Phẩm</h2>
-        <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '20px' }}>
-          {products.map((product) => (
-            <div key={product.id} style={{ border: '1px solid #e0e6ed', borderRadius: '10px', padding: '15px', width: '220px', textAlign: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-              <img src={product.image} alt={product.name} style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '8px', marginBottom: '10px' }} />
-              <h3 style={{ fontSize: '16px', color: '#333', marginBottom: '5px' }}>{product.name}</h3>
-              <p style={{ color: '#2196f3', fontWeight: 'bold', fontSize: '18px', marginBottom: '15px' }}>{product.price} ETH</p>
-              <button 
-                onClick={() => handleSelectProduct(product)}
-                style={{ backgroundColor: '#ff9800', color: 'white', padding: '8px 15px', fontSize: '14px', border: 'none', borderRadius: '5px', width: '100%' }}>
-                🛒 Mua Ngay
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-
       <div className="card" style={{ backgroundColor: '#f0f4f8' }}>
         <h2>1. Trạng Thái Kết Nối</h2>
         {!account ? (
@@ -189,6 +202,65 @@ function App() {
           </button>
         ) : (
           <p style={{ color: 'green', fontSize: '18px' }}>✅ Đã kết nối ví: <strong>{account}</strong></p>
+        )}
+      </div>
+
+      {/* KHU VỰC DÀNH RIÊNG CHO ADMIN (Chỉ hiện khi kết nối đúng ví Admin) */}
+      {account === ADMIN_ADDRESS && (
+        <div className="card" style={{ backgroundColor: '#fff3e0', border: '2px solid #ff9800' }}>
+          <h2 style={{ color: '#e65100' }}>👑 Khu Vực Quản Trị (Admin) - Thêm Sản Phẩm</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
+            <input 
+              type="text" 
+              placeholder="Tên sản phẩm (VD: iPhone 15 Pro Max)" 
+              value={newProdName}
+              onChange={(e) => setNewProdName(e.target.value)}
+            />
+            <input 
+              type="text" 
+              placeholder="Link ảnh chụp sản phẩm (URL)" 
+              value={newProdImage}
+              onChange={(e) => setNewProdImage(e.target.value)}
+            />
+            <input 
+              type="number" 
+              placeholder="Giá bán (ETH)" 
+              value={newProdPrice}
+              onChange={(e) => setNewProdPrice(e.target.value)}
+            />
+            <input 
+              type="text" 
+              placeholder="Địa chỉ ví Người Bán (0x...)" 
+              value={newProdSeller}
+              onChange={(e) => setNewProdSeller(e.target.value)}
+            />
+            <button onClick={handleAddProduct} style={{ backgroundColor: '#e65100', color: 'white', padding: '12px 20px', width: '100%', fontSize: '16px', border: 'none' }}>
+              ➕ Đăng Bán Sản Phẩm
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* GIAN HÀNG SẢN PHẨM */}
+      <div className="card" style={{ backgroundColor: '#fff', border: '1px solid #e0e6ed' }}>
+        <h2>🛒 Gian Hàng Sản Phẩm</h2>
+        {products.length === 0 ? (
+          <p style={{ textAlign: 'center', color: '#888' }}>Chưa có sản phẩm nào được đăng bán.</p>
+        ) : (
+          <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '20px' }}>
+            {products.map((product) => (
+              <div key={product.id} style={{ border: '1px solid #e0e6ed', borderRadius: '10px', padding: '15px', width: '220px', textAlign: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
+                <img src={product.image} alt={product.name} style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '8px', marginBottom: '10px' }} />
+                <h3 style={{ fontSize: '16px', color: '#333', marginBottom: '5px' }}>{product.name}</h3>
+                <p style={{ color: '#2196f3', fontWeight: 'bold', fontSize: '18px', marginBottom: '15px' }}>{product.price} ETH</p>
+                <button 
+                  onClick={() => handleSelectProduct(product)}
+                  style={{ backgroundColor: '#ff9800', color: 'white', padding: '8px 15px', fontSize: '14px', border: 'none', borderRadius: '5px', width: '100%' }}>
+                  🛒 Mua Ngay
+                </button>
+              </div>
+            ))}
+          </div>
         )}
       </div>
 
