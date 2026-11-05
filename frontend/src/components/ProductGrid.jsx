@@ -1,29 +1,65 @@
-import React from 'react';
+import { useState } from 'react';
+import { ImageOff, ShieldCheck, Search, RefreshCw } from 'lucide-react';
+import { formatEth, shortAddr } from '../utils/config';
 
-function ProductGrid({ products, onSelectProduct }) {
-  return (
-    <div className="card" style={{ backgroundColor: '#fff', border: '1px solid #e0e6ed' }}>
-      <h2>🛒 Gian Hàng Sản Phẩm</h2>
-      {products.length === 0 ? (
-        <p style={{ textAlign: 'center', color: '#888' }}>Chưa có sản phẩm nào được đăng bán.</p>
-      ) : (
-        <div style={{ display: 'flex', gap: '20px', justifyContent: 'center', flexWrap: 'wrap', marginTop: '20px' }}>
-          {products.map((product) => (
-            <div key={product.id} style={{ border: '1px solid #e0e6ed', borderRadius: '10px', padding: '15px', width: '220px', textAlign: 'center', boxShadow: '0 4px 6px rgba(0,0,0,0.05)' }}>
-              <img src={product.image_url} alt={product.name} style={{ width: '100%', height: '120px', objectFit: 'cover', borderRadius: '8px', marginBottom: '10px' }} />
-              <h3 style={{ fontSize: '16px', color: '#333', marginBottom: '5px' }}>{product.name}</h3>
-              <p style={{ color: '#2196f3', fontWeight: 'bold', fontSize: '18px', marginBottom: '15px' }}>{product.price} ETH</p>
-              <button 
-                onClick={() => onSelectProduct(product)}
-                style={{ backgroundColor: '#ff9800', color: 'white', padding: '8px 15px', fontSize: '14px', border: 'none', borderRadius: '5px', width: '100%' }}>
-                🛒 Mua Ngay
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+export function ProductImage({ src, alt }) {
+  const [broken, setBroken] = useState(false);
+  if (!src || broken) return <div className="product__img product__img--empty"><ImageOff size={28} /></div>;
+  return <img className="product__img" src={src} alt={alt} loading="lazy" onError={() => setBroken(true)} />;
 }
 
-export default ProductGrid;
+export default function ProductGrid({ products, loading, error, onRetry, account, onBuy }) {
+  const [q, setQ] = useState('');
+  const list = products.filter((p) => p.name.toLowerCase().includes(q.trim().toLowerCase()));
+
+  return (
+    <section className="container section">
+      <div className="section__head">
+        <div>
+          <h2>Gian hàng</h2>
+          <p className="muted">Mọi đơn mua đều được bảo vệ bởi hợp đồng escrow.</p>
+        </div>
+        <label className="search">
+          <Search size={16} />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm sản phẩm…" />
+        </label>
+      </div>
+
+      {loading ? (
+        <div className="grid">{[...Array(4)].map((_, i) => <div key={i} className="product skeleton" />)}</div>
+      ) : error ? (
+        <div className="empty">
+          <p>Không tải được danh sách sản phẩm. Máy chủ miễn phí có thể đang “ngủ”, hãy thử lại sau vài giây.</p>
+          <button className="btn btn--ghost" onClick={onRetry}><RefreshCw size={16} /> Thử lại</button>
+        </div>
+      ) : list.length === 0 ? (
+        <div className="empty"><p>{q ? 'Không có sản phẩm phù hợp.' : 'Chưa có sản phẩm nào được đăng bán.'}</p></div>
+      ) : (
+        <div className="grid">
+          {list.map((p) => {
+            const isMine = account && p.seller_address.toLowerCase() === account;
+            return (
+              <article key={p.id} className="product">
+                <div className="product__media">
+                  <ProductImage src={p.image_url} alt={p.name} />
+                  <span className="badge badge--glass"><ShieldCheck size={13} /> Escrow</span>
+                </div>
+                <div className="product__body">
+                  <h3 title={p.name}>{p.name}</h3>
+                  {p.description && <p className="product__desc">{p.description}</p>}
+                  <p className="product__seller">Người bán <span className="mono">{shortAddr(p.seller_address)}</span></p>
+                  <div className="product__foot">
+                    <span className="price">{formatEth(p.price)} <small>ETH</small></span>
+                    <button className="btn btn--primary btn--sm" disabled={isMine} onClick={() => onBuy(p)}>
+                      {isMine ? 'Hàng của bạn' : 'Mua ngay'}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}

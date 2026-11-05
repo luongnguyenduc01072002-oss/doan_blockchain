@@ -1,0 +1,72 @@
+# EscrowMart — DApp trung gian giữ tiền (Escrow) trên Ethereum
+
+Người mua khóa ETH vào hợp đồng thông minh, người bán chỉ nhận được tiền khi người mua xác nhận đã nhận hàng.
+Có tranh chấp thì Admin phân xử; người mua "im lặng" quá hạn thì người bán được tự rút.
+
+```
+contracts/EscrowMarketplace.sol   Hợp đồng (1 hợp đồng – nhiều đơn hàng)
+test/run.mjs                      10 kịch bản kiểm thử (biên dịch + chạy trên chuỗi ganache)
+EscrowABI.json                    ABI sinh ra từ lần biên dịch
+backend/                          API Node.js + TiDB (thêm/xóa sản phẩm có xác thực chữ ký ví Admin)
+frontend/                         React + Vite + ethers v6
+screenshots/                      Ảnh giao diện chụp khi chạy thật trên chuỗi thử
+```
+
+## 1. Hợp đồng
+
+| Hàm | Ai gọi | Tác dụng |
+|---|---|---|
+| `createOrder(productId, seller)` *payable* | Người mua | Tạo đơn, khóa ETH → `FUNDED` |
+| `markShipped(id)` | Người bán | Báo đã gửi hàng → `SHIPPED`, bắt đầu đếm hạn |
+| `confirmDelivery(id)` | Người mua | Giải ngân cho người bán → `COMPLETED` |
+| `refundBySeller(id)` | Người bán | Hủy đơn, hoàn tiền → `REFUNDED` |
+| `openDispute(id)` | Người mua / bán | Đóng băng đơn chờ phân xử → `DISPUTED` |
+| `resolveDispute(id, toSeller)` | Admin | Trả cho người bán hoặc hoàn người mua |
+| `claimAfterTimeout(id)` | Người bán | Đã gửi hàng + quá hạn mà người mua không phản hồi → rút tiền |
+
+Bảo mật: modifier phân quyền theo từng đơn, kiểm tra trạng thái, Checks‑Effects‑Interactions + khóa `nonReentrant`,
+`arbiter` và `autoReleasePeriod` là `immutable` (không ai sửa được sau khi deploy).
+
+**Chạy kiểm thử** (ở thư mục gốc): `npm i solc@0.8.24 ganache ethers@6 && node test/run.mjs`
+
+**Deploy bằng Remix** (mạng Sepolia):
+1. Dán `EscrowMarketplace.sol` vào Remix, compiler 0.8.24, bật optimizer.
+2. Deploy & Run → Environment *Injected Provider – MetaMask* (đang ở Sepolia).
+3. Tham số: `_arbiter` = địa chỉ ví Admin, `_autoReleasePeriod` = `259200` (3 ngày; khi demo có thể để `300` = 5 phút).
+4. Copy địa chỉ hợp đồng vào `VITE_CONTRACT_ADDRESS`. ABI đã có sẵn trong `frontend/src/EscrowABI.json`.
+
+## 2. Backend
+
+```bash
+cd backend
+cp .env.example .env      # điền thông tin TiDB, ADMIN_ADDRESS, FRONTEND_ORIGIN
+npm install
+node server.js
+```
+Chạy `schema.sql` trên TiDB (bảng cũ chỉ cần lệnh `ALTER TABLE` ở cuối file).
+Trên Render: thêm các biến môi trường như `.env.example`, start command `node server.js`.
+
+## 3. Frontend
+
+```bash
+cd frontend
+cp .env.example .env      # VITE_CONTRACT_ADDRESS, VITE_ADMIN_ADDRESS, VITE_API_URL...
+npm install
+npm run dev
+```
+`VITE_ADMIN_ADDRESS` phải trùng `ADMIN_ADDRESS` của backend và `_arbiter` của hợp đồng.
+
+## 4. Kịch bản demo khi bảo vệ (3 ví MetaMask: Admin, Người mua, Người bán)
+
+1. Ví Admin → tab *Quản trị* → đăng sản phẩm (ví người bán = ví thứ 3) → MetaMask hiện yêu cầu **ký** (không tốn gas).
+2. Ví Người mua → *Mua ngay* → khóa ETH. Hero hiển thị số ETH đang giữ tăng lên.
+3. Ví Người bán → *Đơn hàng của tôi* → *Báo đã gửi hàng*.
+4. Ví Người mua → *Đã nhận hàng* → mở Etherscan cho thấy ETH chuyển từ hợp đồng sang người bán.
+5. Đơn thứ hai: người mua *Khiếu nại* → ví Admin *Hoàn cho người mua*.
+6. (Nếu `_autoReleasePeriod = 300`) Người bán gửi hàng, chờ 5 phút, *Rút tiền (quá hạn)*.
+
+## 5. Giới hạn đã biết (nên nêu trong báo cáo)
+
+- Giá sản phẩm lưu off-chain nên hợp đồng không tự kiểm tra người mua trả đúng giá; người bán thấy số tiền đã khóa trước khi gửi hàng.
+- Admin là một ví duy nhất (điểm tin cậy tập trung) — hướng mở rộng: multisig hoặc hội đồng phân xử.
+- Xác thực "đã nhận hàng" dựa vào người mua; chưa tích hợp đơn vị vận chuyển (oracle).
