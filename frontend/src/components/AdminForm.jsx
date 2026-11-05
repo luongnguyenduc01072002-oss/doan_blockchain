@@ -13,7 +13,7 @@ function AdminForm({ fetchProducts }) {
     
     try {
       // GỌI TRỰC TIẾP VÀO API BACKEND VỪA DỰNG
-      const response = await fetch('http://localhost:5000/api/products', {
+      const response = await fetch('https://doan-blockchain-30uq.onrender.com/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
