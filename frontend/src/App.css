@@ -262,3 +262,27 @@
 .form-actions .btn { flex: 1; }
 .table tr.is-editing td { background: var(--brand-soft); }
 .table td .icon-btn + .icon-btn { margin-left: 4px; }
+
+/* ===================== Menu tài khoản ===================== */
+.account { position: relative; }
+.account-chip { cursor: pointer; }
+.account-chip.is-open { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(15,118,110,.12); }
+.account-chip__caret { color: var(--muted); transition: transform .15s; }
+.account-chip.is-open .account-chip__caret { transform: rotate(180deg); }
+.avatar--lg { width: 36px; height: 36px; flex-shrink: 0; }
+
+.menu { position: absolute; right: 0; top: calc(100% + 8px); z-index: 40; width: 280px; padding: 6px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 18px 40px -16px rgba(0,0,0,.35); animation: pop .14s ease-out; }
+.menu__head { display: flex; align-items: center; gap: 10px; padding: 10px; }
+.menu__who { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.role { display: inline-flex; align-items: center; gap: 4px; font-size: .74rem; font-weight: 600; color: var(--muted); }
+.role--admin { color: #b7791f; }
+.menu__balance { display: flex; justify-content: space-between; align-items: baseline; margin: 0 4px 6px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); font-size: .85rem; }
+.menu__balance strong { font-variant-numeric: tabular-nums; }
+.menu__item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: 9px; background: none; text-align: left; text-decoration: none; font-size: .9rem; font-weight: 500; color: var(--ink-2); }
+.menu__item:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.menu__item:disabled { opacity: .45; }
+.menu__item svg { color: var(--muted); }
+.menu__item--danger { color: var(--danger); border-top: 1px solid var(--line); border-radius: 0 0 9px 9px; margin-top: 4px; padding-top: 12px; }
+.menu__item--danger svg { color: var(--danger); }
+.menu__item--danger:hover:not(:disabled) { background: var(--danger-soft); color: var(--danger); }
+@media (max-width: 560px) { .menu { position: fixed; left: 16px; right: 16px; top: 64px; width: auto; } }

@@ -45,6 +45,14 @@ export const getReadContracts = async () => {
   return list;
 };
 
+/** Số dư ETH (đọc qua RPC công khai, không phụ thuộc mạng của ví). */
+export const getEthBalance = async (address) => {
+  const provider = RPC_URL
+    ? (rpcProvider ??= new ethers.JsonRpcProvider(RPC_URL, CHAIN_ID, { staticNetwork: true }))
+    : new ethers.BrowserProvider(window.ethereum);
+  return ethers.formatEther(await provider.getBalance(address));
+};
+
 /** Bắt buộc ví ở đúng mạng trước khi ký giao dịch; tự đề nghị chuyển mạng nếu sai. */
 export const ensureNetwork = async () => {
   if (!window.ethereum) throw new Error('NO_WALLET');

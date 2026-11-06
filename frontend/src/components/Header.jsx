@@ -1,7 +1,8 @@
-import { ShieldCheck, Wallet, AlertTriangle, Crown } from 'lucide-react';
-import { CHAIN_NAME, shortAddr, addrLink } from '../utils/config';
+import { ShieldCheck, Wallet, AlertTriangle } from 'lucide-react';
+import { CHAIN_NAME } from '../utils/config';
+import AccountMenu from './AccountMenu';
 
-export default function Header({ wallet, isAdmin, onConnect, onSwitch, tab, setTab, counts }) {
+export default function Header({ wallet, isAdmin, onConnect, onSwitch, onSwitchAccount, onDisconnect, busy, tab, setTab, counts }) {
   const { account, wrongNetwork } = wallet;
   const tabs = [
     { key: 'shop', label: 'Gian hàng', count: counts.products },
@@ -28,11 +29,8 @@ export default function Header({ wallet, isAdmin, onConnect, onSwitch, tab, setT
             </button>
           )}
           {account ? (
-            <a className="account-chip" href={addrLink(account)} target="_blank" rel="noreferrer" title={account}>
-              {isAdmin && <Crown size={14} className="account-chip__crown" />}
-              <span className="avatar" style={{ '--h': parseInt(account.slice(2, 6), 16) % 360 }} />
-              <span className="mono">{shortAddr(account)}</span>
-            </a>
+            <AccountMenu account={account} isAdmin={isAdmin} busy={busy}
+              onSwitchAccount={onSwitchAccount} onDisconnect={onDisconnect} />
           ) : (
             <button className="btn btn--primary btn--sm" onClick={onConnect}>
               <Wallet size={16} /> Kết nối ví

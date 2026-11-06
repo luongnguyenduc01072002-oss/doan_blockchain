@@ -98,6 +98,15 @@ export default function App() {
   const connect = async () => {
     try { await wallet.connect(); } catch (e) { show({ type: 'error', title: 'Không kết nối được ví', message: friendlyError(e) }); }
   };
+  const switchAccount = async () => {
+    try { await wallet.switchAccount(); } catch (e) { show({ type: 'error', title: 'Không đổi được tài khoản', message: friendlyError(e) }); }
+  };
+  const disconnect = async () => {
+    await wallet.disconnect();
+    setBuying(null);
+    if (tab !== 'shop') setTab('shop');
+    show({ type: 'success', title: 'Đã đăng xuất ví', message: 'Trang đã ngắt quyền truy cập ví của bạn. Bấm “Kết nối ví” để đăng nhập lại.' });
+  };
   const switchNet = async () => {
     try { await wallet.switchNetwork(); } catch (e) { show({ type: 'error', title: 'Không đổi được mạng', message: friendlyError(e) }); }
   };
@@ -127,7 +136,8 @@ export default function App() {
 
   return (
     <>
-      <Header wallet={wallet} isAdmin={isAdmin} onConnect={connect} onSwitch={switchNet} tab={tab} setTab={setTab}
+      <Header wallet={wallet} isAdmin={isAdmin} onConnect={connect} onSwitch={switchNet}
+        onSwitchAccount={switchAccount} onDisconnect={disconnect} busy={!!pendingKey} tab={tab} setTab={setTab}
         counts={{ products: products.length, myOrders: mine.filter(needAction).length, disputes: disputes.length }} />
 
       {!CONTRACT_ADDRESS && (
