@@ -7,8 +7,15 @@ require('dotenv').config();
 const app = express();
 
 // Chỉ cho phép frontend của mình gọi API (VD: https://cho-web3.vercel.app,http://localhost:5173)
-const allowedOrigins = (process.env.FRONTEND_ORIGIN || '').split(',').map(s => s.trim()).filter(Boolean);
-app.use(cors(allowedOrigins.length ? { origin: allowedOrigins } : {}));
+// Bỏ dấu "/" cuối: trình duyệt gửi Origin dạng https://abc.vercel.app (không có "/"), ghi thừa "/" là bị chặn
+const allowedOrigins = (process.env.FRONTEND_ORIGIN || '').split(',').map(s => s.trim().replace(/\/+$/, '')).filter(Boolean);
+app.use(cors(allowedOrigins.length ? {
+    origin(origin, cb) {
+        if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+        console.warn(`⛔ CORS chặn origin ${origin}. Thêm nó vào FRONTEND_ORIGIN nếu đây là frontend của bạn.`);
+        cb(null, false);
+    },
+} : {}));
 app.use(express.json({ limit: '20kb' }));
 
 const ADMIN_ADDRESS = (process.env.ADMIN_ADDRESS || '').toLowerCase();
@@ -20,14 +27,52 @@ const db = mysql.createPool({
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME,
-    ssl: { rejectUnauthorized: true },
+    ssl: process.env.DB_SSL === 'false' ? undefined : { rejectUnauthorized: true }, // TiDB Cloud bắt buộc SSL
     waitForConnections: true,
     connectionLimit: 10,
 });
 
+/**
+ * Tự tạo / nâng cấp bảng products khi server khởi động.
+ * Bảng cũ (bản trước) thiếu cột description, image_url có thể chỉ 255 ký tự (link ảnh Google thường dài hơn)
+ * -> INSERT lỗi và sản phẩm không hiện. Chỉ THÊM cột / NỚI RỘNG cột, không xóa dữ liệu.
+ */
+async function ensureSchema() {
+    await db.query(`CREATE TABLE IF NOT EXISTS products (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(120) NOT NULL,
+        description VARCHAR(500) NOT NULL DEFAULT '',
+        price DECIMAL(36,18) NOT NULL,
+        image_url VARCHAR(2048) NOT NULL,
+        seller_address CHAR(42) NOT NULL,
+        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )`);
+    const [cols] = await db.query(
+        `SELECT COLUMN_NAME AS name, DATA_TYPE AS type, CHARACTER_MAXIMUM_LENGTH AS len, NUMERIC_SCALE AS scale
+         FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products'`
+    );
+    const col = Object.fromEntries(cols.map(c => [c.name.toLowerCase(), c]));
+    const changes = [];
+    if (!col.description) changes.push(`ADD COLUMN description VARCHAR(500) NOT NULL DEFAULT '' AFTER name`);
+    if (!col.created_at) changes.push(`ADD COLUMN created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`);
+    if (col.image_url && /char/i.test(col.image_url.type) && Number(col.image_url.len) < 2048) changes.push(`MODIFY image_url VARCHAR(2048) NOT NULL`);
+    if (col.price && (!/decimal/i.test(col.price.type) || Number(col.price.scale) < 18)) changes.push(`MODIFY price DECIMAL(36,18) NOT NULL`);
+    for (const c of changes) {
+        await db.query(`ALTER TABLE products ${c}`);
+        console.log(`🛠  Đã nâng cấp bảng products: ${c}`);
+    }
+}
+
 db.getConnection()
-    .then(conn => { console.log('✅ Đã kết nối CSDL TiDB Cloud'); conn.release(); })
-    .catch(err => console.error('❌ Lỗi kết nối CSDL:', err.message));
+    .then(async conn => {
+        conn.release();
+        console.log('✅ Đã kết nối CSDL TiDB Cloud');
+        await ensureSchema();
+        console.log('✅ Bảng products sẵn sàng');
+    })
+    .catch(err => console.error('❌ Lỗi CSDL khi khởi động:', err.code || '', err.message));
+if (!ADMIN_ADDRESS) console.warn('⚠️  Chưa đặt ADMIN_ADDRESS: sẽ không đăng được sản phẩm.');
+console.log('CORS cho phép:', allowedOrigins.length ? allowedOrigins.join(', ') : 'mọi origin');
 
 /**
  * Xác thực Admin bằng chữ ký ví (không cần mật khẩu).
@@ -69,10 +114,9 @@ const validateProduct = ({ name, price, image_url, seller_address, description }
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
 app.get('/api/products', async (req, res) => {
-    const [rows] = await db.query(
-        'SELECT id, name, description, price, image_url, seller_address, created_at FROM products ORDER BY created_at DESC'
-    );
-    res.json(rows);
+    const [rows] = await db.query('SELECT * FROM products ORDER BY id DESC');
+    res.set('Cache-Control', 'no-store'); // luôn lấy danh sách mới nhất sau khi đăng
+    res.json(rows.map(r => ({ ...r, description: r.description || '' })));
 });
 
 app.post('/api/products', requireAdmin('them-san-pham'), async (req, res) => {
@@ -96,9 +140,16 @@ app.delete('/api/products/:id', requireAdmin('xoa-san-pham'), async (req, res) =
 });
 
 // Bắt mọi lỗi chưa xử lý (Express 5 tự chuyển lỗi của hàm async vào đây)
+const DB_ERRORS = {
+    ER_DATA_TOO_LONG: 'Dữ liệu quá dài so với cột trong CSDL (thường là link ảnh). Hãy khởi động lại server để tự nâng cấp bảng.',
+    ER_BAD_FIELD_ERROR: 'Bảng products thiếu cột. Hãy khởi động lại server để tự nâng cấp bảng.',
+    ER_NO_SUCH_TABLE: 'Chưa có bảng products. Hãy khởi động lại server để tự tạo bảng.',
+    ECONNREFUSED: 'Không kết nối được CSDL. Kiểm tra DB_HOST / DB_PORT.',
+    ER_ACCESS_DENIED_ERROR: 'Sai tài khoản hoặc mật khẩu CSDL (DB_USER / DB_PASSWORD).',
+};
 app.use((err, req, res, next) => {
-    console.error(err);
-    res.status(500).json({ error: 'Lỗi máy chủ, vui lòng thử lại sau' });
+    console.error(`❌ ${req.method} ${req.path}:`, err.code || '', err.message);
+    res.status(500).json({ error: DB_ERRORS[err.code] || `Lỗi máy chủ${err.code ? ` (${err.code})` : ''}`, code: err.code });
 });
 
 const PORT = process.env.PORT || 5000;

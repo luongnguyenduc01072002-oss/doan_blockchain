@@ -5,7 +5,7 @@ Có tranh chấp thì Admin phân xử; người mua "im lặng" quá hạn thì
 
 ```
 contracts/EscrowMarketplace.sol   Hợp đồng (1 hợp đồng – nhiều đơn hàng)
-test/run.mjs                      10 kịch bản kiểm thử (biên dịch + chạy trên chuỗi ganache)
+test/run.mjs                      12 kịch bản kiểm thử (biên dịch + chạy trên chuỗi ganache)
 EscrowABI.json                    ABI sinh ra từ lần biên dịch
 backend/                          API Node.js + TiDB (thêm/xóa sản phẩm có xác thực chữ ký ví Admin)
 frontend/                         React + Vite + ethers v6
@@ -18,7 +18,8 @@ screenshots/                      Ảnh giao diện chụp khi chạy thật tr�
 |---|---|---|
 | `createOrder(productId, seller)` *payable* | Người mua | Tạo đơn, khóa ETH → `FUNDED` |
 | `markShipped(id)` | Người bán | Báo đã gửi hàng → `SHIPPED`, bắt đầu đếm hạn |
-| `confirmDelivery(id)` | Người mua | Giải ngân cho người bán → `COMPLETED` |
+| `confirmDelivery(id)` | Người mua | **Chỉ khi đã `SHIPPED`**: giải ngân cho người bán → `COMPLETED` |
+| `cancelByBuyer(id)` | Người mua | **Chỉ khi còn `FUNDED`** (chưa gửi hàng): hủy đơn, lấy lại tiền → `REFUNDED` |
 | `refundBySeller(id)` | Người bán | Hủy đơn, hoàn tiền → `REFUNDED` |
 | `openDispute(id)` | Người mua / bán | Đóng băng đơn chờ phân xử → `DISPUTED` |
 | `resolveDispute(id, toSeller)` | Admin | Trả cho người bán hoặc hoàn người mua |
@@ -43,7 +44,9 @@ cp .env.example .env      # điền thông tin TiDB, ADMIN_ADDRESS, FRONTEND_ORI
 npm install
 node server.js
 ```
-Chạy `schema.sql` trên TiDB (bảng cũ chỉ cần lệnh `ALTER TABLE` ở cuối file).
+Bảng `products` được **tự tạo / tự nâng cấp khi server khởi động** (thêm cột `description`, nới `image_url` lên 2048 ký tự, `price` lên DECIMAL(36,18)); dữ liệu cũ giữ nguyên. `schema.sql` chỉ để tham khảo.
+
+Nếu đăng sản phẩm không hiện, mở **Logs** trên Render: server in rõ lỗi CSDL, CORS bị chặn hoặc thiếu `ADMIN_ADDRESS`.
 Trên Render: thêm các biến môi trường như `.env.example`, start command `node server.js`.
 
 ## 3. Frontend
