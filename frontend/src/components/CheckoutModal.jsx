@@ -4,7 +4,9 @@ import { ProductImage } from './ProductGrid';
 import { formatEth } from '../utils/config';
 
 /** Hộp thoại xác nhận mua: cho người mua thấy rõ tiền sẽ đi đâu trước khi ký. */
-export default function CheckoutModal({ product, onClose, onConfirm, busy }) {
+const fmtPeriod = (sec) => (sec >= 86400 ? `${Math.round(sec / 86400)} ngày` : sec >= 3600 ? `${Math.round(sec / 3600)} giờ` : `${Math.max(1, Math.round(sec / 60))} phút`);
+
+export default function CheckoutModal({ product, autoRelease, onClose, onConfirm, busy }) {
   useEffect(() => {
     const onKey = (e) => e.key === 'Escape' && !busy && onClose();
     window.addEventListener('keydown', onKey);
@@ -37,6 +39,9 @@ export default function CheckoutModal({ product, onClose, onConfirm, busy }) {
           <li><b>1</b> Tiền được khóa trong hợp đồng, người bán chưa nhận được.</li>
           <li><b>2</b> Người bán gửi hàng và báo “đã gửi”.</li>
           <li><b>3</b> Bạn bấm “Đã nhận hàng” → tiền tự động chuyển cho người bán.</li>
+          {autoRelease > 0 && (
+            <li><b>!</b> Sau khi người bán báo gửi, bạn có <strong>&nbsp;{fmtPeriod(autoRelease)}&nbsp;</strong> để xác nhận hoặc khiếu nại. Quá hạn, người bán được rút tiền.</li>
+          )}
         </ol>
         <p className="note"><ShieldCheck size={16} /> Người bán chưa gửi hàng thì bạn hủy được ngay và lấy lại tiền. Đã gửi mà hàng có vấn đề thì mở khiếu nại để Admin phân xử.</p>
 

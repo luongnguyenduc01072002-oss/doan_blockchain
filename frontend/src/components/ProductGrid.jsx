@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ImageOff, ShieldCheck, Search, RefreshCw } from 'lucide-react';
-import { formatEth, shortAddr } from '../utils/config';
+import { formatEth, shortAddr, ADMIN_ADDRESS } from '../utils/config';
 
 export function ProductImage({ src, alt }) {
   const [broken, setBroken] = useState(false);
@@ -38,6 +38,7 @@ export default function ProductGrid({ products, loading, error, onRetry, account
         <div className="grid">
           {list.map((p) => {
             const isMine = account && p.seller_address.toLowerCase() === account;
+            const badSeller = p.seller_address.toLowerCase() === ADMIN_ADDRESS; // hợp đồng sẽ từ chối
             return (
               <article key={p.id} className="product">
                 <div className="product__media">
@@ -50,8 +51,9 @@ export default function ProductGrid({ products, loading, error, onRetry, account
                   <p className="product__seller">Người bán <span className="mono">{shortAddr(p.seller_address)}</span></p>
                   <div className="product__foot">
                     <span className="price">{formatEth(p.price)} <small>ETH</small></span>
-                    <button className="btn btn--primary btn--sm" disabled={isMine} onClick={() => onBuy(p)}>
-                      {isMine ? 'Hàng của bạn' : 'Mua ngay'}
+                    <button className="btn btn--primary btn--sm" disabled={isMine || badSeller} onClick={() => onBuy(p)}
+                      title={badSeller ? 'Ví người bán trùng ví Admin, Admin cần sửa lại' : undefined}>
+                      {isMine ? 'Hàng của bạn' : badSeller ? 'Tạm ngưng' : 'Mua ngay'}
                     </button>
                   </div>
                 </div>

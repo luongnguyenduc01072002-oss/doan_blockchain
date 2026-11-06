@@ -25,7 +25,14 @@ export default function useWallet() {
   }, [hasWallet]);
 
   const connect = useCallback(async () => {
-    if (!hasWallet) throw new Error('NO_WALLET');
+    if (!hasWallet) {
+      // Trình duyệt điện thoại không có MetaMask: mở trang này trong trình duyệt của app MetaMask
+      if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        window.location.href = `https://metamask.app.link/dapp/${window.location.host}${window.location.pathname}`;
+        return;
+      }
+      throw new Error('NO_WALLET');
+    }
     const a = await window.ethereum.request({ method: 'eth_requestAccounts' });
     setAccount(a[0]?.toLowerCase() || '');
   }, [hasWallet]);

@@ -3,12 +3,11 @@ import { Store, Truck, CheckCircle2, Undo2, Gavel, Clock, Loader2, Wallet, Lock 
 import { STATUS, formatEth, shortAddr, addrLink } from '../utils/config';
 import { ProductImage } from './ProductGrid';
 
-const fmtDate = (s) => (s ? new Date(Number(s) * 1000).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : '');
+const fmtDate = (s) => (s ? new Date(s * 1000).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : '');
 
 const fmtLeft = (sec) => {
-  const s = Number(sec);
-  if (s <= 0) return 'đã hết hạn';
-  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+  if (sec <= 0) return 'đã hết hạn';
+  const d = Math.floor(sec / 86400), h = Math.floor((sec % 86400) / 3600), m = Math.floor((sec % 3600) / 60);
   return d ? `${d} ngày ${h} giờ` : h ? `${h} giờ ${m} phút` : `${m} phút`;
 };
 
@@ -21,19 +20,14 @@ function useNow() {
 /** Thanh tiến trình đơn: Khóa tiền → Đã gửi → Kết thúc (giải ngân / hoàn tiền) */
 function Timeline({ order }) {
   const s = order.status;
-  const shippedAtNum = Number(order.shippedAt || 0);
-  const createdAtNum = Number(order.createdAt || 0);
-  
   const end = s === 5 ? { label: 'Đã hoàn tiền', icon: Undo2, tone: 'danger' }
     : s === 3 ? { label: 'Chờ phân xử', icon: Gavel, tone: 'dispute' }
     : { label: 'Đã giải ngân', icon: CheckCircle2, tone: 'ok' };
-    
   const steps = [
-    { label: 'Đã khóa tiền', icon: Lock, done: true, time: fmtDate(createdAtNum) },
-    { label: 'Đã gửi hàng', icon: Truck, done: shippedAtNum > 0, time: fmtDate(shippedAtNum) },
+    { label: 'Đã khóa tiền', icon: Lock, done: true, time: fmtDate(order.createdAt) },
+    { label: 'Đã gửi hàng', icon: Truck, done: order.shippedAt > 0, time: fmtDate(order.shippedAt) },
     { label: end.label, icon: end.icon, done: s >= 3, tone: end.tone },
   ];
-  
   return (
     <ol className="timeline">
       {steps.map((st, i) => (
@@ -53,11 +47,9 @@ function OrderCard({ order, product, account, isAdmin, autoRelease, run, pending
   const isBuyer = account === order.buyer.toLowerCase();
   const isSeller = account === order.seller.toLowerCase();
   const role = isBuyer ? 'Bạn là người mua' : isSeller ? 'Bạn là người bán' : 'Admin xem';
-  
-  const shippedAtNum = Number(order.shippedAt || 0);
-  const releaseAt = shippedAtNum > 0 ? shippedAtNum + Number(autoRelease) : 0;
+  const releaseAt = order.shippedAt ? order.shippedAt + autoRelease : 0;
   const canClaim = order.status === 2 && now >= releaseAt;
-  const id = Number(order.id);
+  const id = order.id;
 
   const act = (key, labels, fn) => (
     <button key={key} className={`btn btn--sm ${labels.cls}`} disabled={!!pendingKey}
@@ -84,7 +76,7 @@ function OrderCard({ order, product, account, isAdmin, autoRelease, run, pending
   if (isSeller && [1, 2, 3].includes(order.status)) {
     actions.push(act('refund', { cls: 'btn--ghost', icon: <Undo2 size={15} />, text: 'Hủy & hoàn tiền', title: `Hoàn tiền đơn #${id}`, success: 'Đã hoàn tiền cho người mua' }, (c) => c.refundBySeller(id)));
   }
-  if ((isBuyer || isSeller) && (order.status === 1 || order.status === 2)) {
+  if ((isBuyer || isSeller) && order.status === 2) { // hợp đồng chỉ cho khiếu nại sau khi đã gửi hàng
     actions.push(act('dispute', { cls: 'btn--danger-ghost', icon: <Gavel size={15} />, text: 'Khiếu nại', title: `Mở tranh chấp đơn #${id}`, success: 'Đã gửi khiếu nại tới Admin' }, (c) => c.openDispute(id)));
   }
   if (isAdmin && order.status === 3) {
@@ -99,7 +91,7 @@ function OrderCard({ order, product, account, isAdmin, autoRelease, run, pending
           <ProductImage src={product?.image_url} alt={product?.name || ''} />
           <div>
             <span className="order__id">Đơn #{id} · {role}</span>
-            <h3>{product?.name || `Sản phẩm #${Number(order.productId)}`}</h3>
+            <h3>{product?.name || `Sản phẩm #${order.productId}`}</h3>
             <span className={`status status--${st.tone}`}>{st.label}</span>
           </div>
         </div>
@@ -117,7 +109,7 @@ function OrderCard({ order, product, account, isAdmin, autoRelease, run, pending
       </dl>
 
       {order.status === 1 && isBuyer && (
-        <p className="note note--info"><Truck size={15} /> Đang chờ người bán gửi hàng. Nút “Đã nhận hàng” sẽ hiện khi người bán báo đã gửi; trước đó bạn có thể hủy đơn để lấy lại tiền.</p>
+        <p className="note note--info"><Truck size={15} /> Đang chờ người bán gửi hàng. Nút “Đã nhận hàng” sẽ hiện khi người bán báo đã gửi; trước đó bạn có thể hủy đơn để lấy lại tiền ngay.</p>
       )}
       {order.status === 1 && isSeller && (
         <p className="note note--info"><Truck size={15} /> Người mua đã khóa tiền. Hãy gửi hàng rồi bấm “Báo đã gửi hàng” để người mua xác nhận và bạn nhận tiền.</p>
@@ -130,6 +122,7 @@ function OrderCard({ order, product, account, isAdmin, autoRelease, run, pending
     </article>
   );
 }
+
 
 export default function OrderList({ title, subtitle, orders, products, account, isAdmin, autoRelease, run, pendingKey, filters, emptyText, loading }) {
   const [filter, setFilter] = useState(filters?.[0]?.key);
@@ -161,7 +154,7 @@ export default function OrderList({ title, subtitle, orders, products, account, 
       ) : (
         <div className="orders">
           {list.map((o) => (
-            <OrderCard key={o.id.toString()} order={o} product={products.find((p) => Number(p.id) === Number(o.productId))}
+            <OrderCard key={o.id} order={o} product={products.find((p) => Number(p.id) === o.productId)}
               account={account} isAdmin={isAdmin} autoRelease={autoRelease} run={run} pendingKey={pendingKey} />
           ))}
         </div>

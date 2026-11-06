@@ -46,7 +46,7 @@ async function ensureSchema() {
         image_url VARCHAR(2048) NOT NULL,
         seller_address CHAR(42) NOT NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )`);
+    ) DEFAULT CHARSET = utf8mb4`); // utf8mb4: lưu đúng tiếng Việt và emoji
     const [cols] = await db.query(
         `SELECT COLUMN_NAME AS name, DATA_TYPE AS type, CHARACTER_MAXIMUM_LENGTH AS len, NUMERIC_SCALE AS scale
          FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products'`
@@ -107,6 +107,8 @@ const validateProduct = ({ name, price, image_url, seller_address, description }
         if (!['http:', 'https:'].includes(u.protocol)) throw new Error();
     } catch { return 'Link ảnh phải là URL http(s) hợp lệ'; }
     if (!ethers.isAddress(seller_address)) return 'Địa chỉ ví người bán không hợp lệ';
+    // Admin là người phân xử tranh chấp, không được đồng thời là người bán (hợp đồng cũng chặn)
+    if (ADMIN_ADDRESS && seller_address.toLowerCase() === ADMIN_ADDRESS) return 'Không dùng ví Admin làm người bán: Admin phải trung lập khi phân xử';
     if (description && String(description).length > 500) return 'Mô tả tối đa 500 ký tự';
     return null;
 };
@@ -129,6 +131,21 @@ app.post('/api/products', requireAdmin('them-san-pham'), async (req, res) => {
         [name.trim(), String(description).trim(), String(price), image_url.trim(), ethers.getAddress(seller_address)]
     );
     res.status(201).json({ message: 'Thêm sản phẩm thành công', productId: result.insertId });
+});
+
+app.put('/api/products/:id', requireAdmin('sua-san-pham'), async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'ID không hợp lệ' });
+    const error = validateProduct(req.body);
+    if (error) return res.status(400).json({ error });
+
+    const { name, price, image_url, seller_address, description = '' } = req.body;
+    const [result] = await db.execute(
+        'UPDATE products SET name = ?, description = ?, price = ?, image_url = ?, seller_address = ? WHERE id = ?',
+        [name.trim(), String(description).trim(), String(price), image_url.trim(), ethers.getAddress(seller_address), id]
+    );
+    if (!result.affectedRows) return res.status(404).json({ error: 'Không tìm thấy sản phẩm' });
+    res.json({ message: 'Đã cập nhật sản phẩm' });
 });
 
 app.delete('/api/products/:id', requireAdmin('xoa-san-pham'), async (req, res) => {

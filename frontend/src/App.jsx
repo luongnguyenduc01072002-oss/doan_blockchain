@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ethers } from 'ethers';
 import { Wallet, AlertTriangle } from 'lucide-react';
-import { API_URL, ADMIN_ADDRESS, CONTRACT_ADDRESS, CHAIN_NAME, getReadContract, friendlyError } from './utils/config';
+import { API_URL, ADMIN_ADDRESS, CONTRACT_ADDRESS, CHAIN_NAME, getReadContracts, friendlyError } from './utils/config';
 import useWallet from './hooks/useWallet';
 import useTx from './hooks/useTx';
 import { useToast } from './components/Toast';
@@ -42,33 +42,42 @@ export default function App() {
   }, []);
 
   // ---------- Dữ liệu on-chain: đọc trực tiếp trạng thái thật từ hợp đồng ----------
+  const chainReq = useRef(0);
+  const [chainError, setChainError] = useState(false);
   const fetchChain = useCallback(async () => {
-    const contract = getReadContract();
-    if (!contract) { setOrdersLoading(false); return; }
-    try {
-      const [count, balance, period] = await Promise.all([
-        contract.orderCount(), contract.runner.provider.getBalance(CONTRACT_ADDRESS), contract.autoReleasePeriod(),
-      ]);
-      const ids = Array.from({ length: Number(count) }, (_, i) => i + 1);
-      const raw = await Promise.all(ids.map((id) => contract.getOrder(id)));
-      const list = raw.map((o) => ({
-        id: Number(o.id),
-        productId: Number(o.productId),
-        buyer: o.buyer,
-        seller: o.seller,
-        amountEth: ethers.formatEther(o.amount),
-        status: Number(o.status),
-        createdAt: Number(o.createdAt),
-        shippedAt: Number(o.shippedAt),
-      })).reverse();
-      setOrders(list);
-      setAutoRelease(Number(period));
-      setStats({ locked: ethers.formatEther(balance), orders: list.length, completed: list.filter((o) => o.status === 4).length });
-    } catch (e) {
-      console.warn('Không đọc được hợp đồng (có thể ví đang ở sai mạng):', e);
-    } finally {
-      setOrdersLoading(false);
+    const req = ++chainReq.current; // chỉ nhận kết quả của lần đọc mới nhất (tránh dữ liệu cũ ghi đè dữ liệu mới)
+    const contracts = await getReadContracts();
+    if (!contracts.length) { setOrdersLoading(false); return; }
+    for (const contract of contracts) {           // RPC công khai lỗi -> thử tiếp bằng ví MetaMask
+      try {
+        const provider = contract.runner.provider ?? contract.runner;
+        const [count, balance, period] = await Promise.all([
+          contract.orderCount(), provider.getBalance(CONTRACT_ADDRESS), contract.autoReleasePeriod(),
+        ]);
+        const ids = Array.from({ length: Number(count) }, (_, i) => i + 1);
+        const raw = await Promise.all(ids.map((id) => contract.getOrder(id)));
+        if (req !== chainReq.current) return;
+        const list = raw.map((o) => ({
+          id: Number(o.id),
+          productId: Number(o.productId),
+          buyer: o.buyer,
+          seller: o.seller,
+          amountEth: ethers.formatEther(o.amount),
+          status: Number(o.status),
+          createdAt: Number(o.createdAt),
+          shippedAt: Number(o.shippedAt),
+        })).reverse();
+        setOrders(list);
+        setAutoRelease(Number(period));
+        setStats({ locked: ethers.formatEther(balance), orders: list.length, completed: list.filter((o) => o.status === 4).length });
+        setChainError(false);
+        setOrdersLoading(false);
+        return;
+      } catch (e) {
+        console.warn('Không đọc được hợp đồng qua một nguồn RPC, thử nguồn khác:', e);
+      }
     }
+    if (req === chainReq.current) { setChainError(true); setOrdersLoading(false); }
   }, []);
 
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
@@ -80,7 +89,11 @@ export default function App() {
   useEffect(() => { if (!isAdmin && tab === 'admin') setTab('shop'); }, [isAdmin, tab]);
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }); }, [tab]);
 
-  const { run, pendingKey } = useTx(fetchChain);
+  const refreshAfterTx = useCallback(async () => {
+    await fetchChain();
+    setTimeout(fetchChain, 4000); // RPC công khai có thể chậm hơn ví 1 khối
+  }, [fetchChain]);
+  const { run, pendingKey } = useTx(refreshAfterTx);
 
   const connect = async () => {
     try { await wallet.connect(); } catch (e) { show({ type: 'error', title: 'Không kết nối được ví', message: friendlyError(e) }); }
@@ -92,6 +105,10 @@ export default function App() {
   const startBuy = async (p) => {
     if (!account) { await connect(); return; }
     if (wrongNetwork) { await switchNet(); return; }
+    if (p.seller_address.toLowerCase() === ADMIN_ADDRESS) {
+      show({ type: 'error', title: 'Sản phẩm chưa bán được', message: 'Ví người bán đang trùng ví Admin (người phân xử). Admin cần sửa ví người bán của sản phẩm này.' });
+      return;
+    }
     setBuying(p);
   };
 
@@ -115,6 +132,10 @@ export default function App() {
 
       {!CONTRACT_ADDRESS && (
         <div className="banner container"><AlertTriangle size={18} /> Chưa cấu hình VITE_CONTRACT_ADDRESS trong file .env của frontend.</div>
+      )}
+      {chainError && CONTRACT_ADDRESS && (
+        <div className="banner container"><AlertTriangle size={18} /> Không đọc được dữ liệu từ blockchain, trạng thái đơn có thể chưa mới nhất.
+          <button className="btn btn--warn btn--sm" onClick={fetchChain}>Thử lại</button></div>
       )}
       {wrongNetwork && (
         <div className="banner container"><AlertTriangle size={18} /> Ví đang ở sai mạng. Hợp đồng nằm trên {CHAIN_NAME}.
@@ -171,7 +192,7 @@ export default function App() {
         <span className="muted">Solidity · React · ethers.js · Node.js · TiDB Cloud</span>
       </footer>
 
-      <CheckoutModal product={buying} busy={pendingKey === 'buy'} onClose={() => setBuying(null)} onConfirm={confirmBuy} />
+      <CheckoutModal product={buying} autoRelease={autoRelease} busy={pendingKey === 'buy'} onClose={() => setBuying(null)} onConfirm={confirmBuy} />
     </>
   );
 }

@@ -255,3 +255,10 @@
   .order__actions .btn { flex: 1; }
   .field-row { grid-template-columns: 1fr; }
 }
+
+/* ===================== Sửa sản phẩm ===================== */
+.panel--editing { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(15,118,110,.12); }
+.form-actions { display: flex; gap: 10px; }
+.form-actions .btn { flex: 1; }
+.table tr.is-editing td { background: var(--brand-soft); }
+.table td .icon-btn + .icon-btn { margin-left: 4px; }

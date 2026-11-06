@@ -8,7 +8,9 @@ export const ADMIN_ADDRESS = import.meta.env.VITE_ADMIN_ADDRESS?.toLowerCase();
 export const CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID || 11155111); // Sepolia
 export const CHAIN_NAME = import.meta.env.VITE_CHAIN_NAME || 'Sepolia';
 export const EXPLORER = (import.meta.env.VITE_EXPLORER || 'https://sepolia.etherscan.io').replace(/\/$/, '');
-const RPC_URL = import.meta.env.VITE_RPC_URL; // tùy chọn: để khách chưa có ví vẫn xem được đơn
+// RPC công khai để ĐỌC dữ liệu hợp đồng, không phụ thuộc ví đang ở mạng nào (và khách chưa có ví vẫn xem được)
+const RPC_URL = import.meta.env.VITE_RPC_URL || (CHAIN_ID === 11155111 ? 'https://ethereum-sepolia-rpc.publicnode.com' : '');
+const CHAIN_HEX = '0x' + CHAIN_ID.toString(16);
 
 // ---- Trạng thái đơn trong hợp đồng (khớp enum Status) ----
 export const STATUS = {
@@ -21,28 +23,57 @@ export const STATUS = {
 };
 
 // ---- Hợp đồng ----
-let readProvider;
-export const getReadProvider = () => {
-  if (readProvider) return readProvider;
-  if (RPC_URL) readProvider = new ethers.JsonRpcProvider(RPC_URL, CHAIN_ID);
-  else if (window.ethereum) readProvider = new ethers.BrowserProvider(window.ethereum);
-  return readProvider;
+let rpcProvider;
+/**
+ * Danh sách hợp đồng chỉ-đọc theo thứ tự ưu tiên: RPC công khai trước, ví MetaMask sau.
+ * KHÔNG lưu lại BrowserProvider: ethers v6 báo lỗi "network changed" mãi mãi
+ * sau khi người dùng đổi mạng trên ví, làm danh sách đơn đứng yên không cập nhật.
+ */
+export const getReadContracts = async () => {
+  if (!CONTRACT_ADDRESS) return [];
+  const list = [];
+  if (RPC_URL) {
+    rpcProvider ??= new ethers.JsonRpcProvider(RPC_URL, CHAIN_ID, { staticNetwork: true });
+    list.push(new ethers.Contract(CONTRACT_ADDRESS, EscrowABI, rpcProvider));
+  }
+  if (window.ethereum) {
+    try {
+      const chain = Number(await window.ethereum.request({ method: 'eth_chainId' }));
+      if (chain === CHAIN_ID) list.push(new ethers.Contract(CONTRACT_ADDRESS, EscrowABI, new ethers.BrowserProvider(window.ethereum)));
+    } catch { /* ví bị khóa / lỗi: bỏ qua */ }
+  }
+  return list;
 };
 
-export const getReadContract = () => {
-  const provider = getReadProvider();
-  if (!provider || !CONTRACT_ADDRESS) return null;
-  return new ethers.Contract(CONTRACT_ADDRESS, EscrowABI, provider);
+/** Bắt buộc ví ở đúng mạng trước khi ký giao dịch; tự đề nghị chuyển mạng nếu sai. */
+export const ensureNetwork = async () => {
+  if (!window.ethereum) throw new Error('NO_WALLET');
+  const current = Number(await window.ethereum.request({ method: 'eth_chainId' }));
+  if (current === CHAIN_ID) return;
+  try {
+    await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAIN_HEX }] });
+  } catch (e) {
+    if (e?.code === 4001) throw e; // người dùng bấm từ chối
+    throw new Error('WRONG_NETWORK');
+  }
+  if (Number(await window.ethereum.request({ method: 'eth_chainId' })) !== CHAIN_ID) throw new Error('WRONG_NETWORK');
 };
 
 export const getSigner = async () => {
   if (!window.ethereum) throw new Error('NO_WALLET');
-  const provider = new ethers.BrowserProvider(window.ethereum);
-  return provider.getSigner();
+  return new ethers.BrowserProvider(window.ethereum).getSigner();
 };
 
-export const getWriteContract = async () =>
-  new ethers.Contract(CONTRACT_ADDRESS, EscrowABI, await getSigner());
+/**
+ * Hợp đồng để GHI (gửi giao dịch). Luôn kiểm tra mạng trước:
+ * nếu ví đang ở Ethereum mainnet, giao dịch sẽ gửi ETH THẬT tới cùng địa chỉ trên mainnet
+ * (nơi không có hợp đồng nào) và mất trắng.
+ */
+export const getWriteContract = async () => {
+  if (!CONTRACT_ADDRESS) throw new Error('NO_CONTRACT');
+  await ensureNetwork();
+  return new ethers.Contract(CONTRACT_ADDRESS, EscrowABI, await getSigner());
+};
 
 // ---- Xác thực Admin với backend (khớp server.js) ----
 export const buildAdminMessage = (action, timestamp) =>
@@ -68,6 +99,8 @@ export const addrLink = (addr) => `${EXPLORER}/address/${addr}`;
 /** Dịch lỗi ví / hợp đồng sang câu dễ hiểu cho người dùng. */
 export const friendlyError = (e) => {
   if (e instanceof TypeError && /fetch/i.test(e.message)) return 'Không gọi được máy chủ API. Máy chủ Render có thể đang khởi động (chờ ~30 giây) hoặc biến FRONTEND_ORIGIN trên Render chưa đúng domain frontend.';
+  if (e?.message === 'WRONG_NETWORK') return `Ví đang ở sai mạng. Hãy chuyển MetaMask sang ${CHAIN_NAME} rồi thử lại — giao dịch đã được chặn để bạn không mất ETH thật.`;
+  if (e?.message === 'NO_CONTRACT') return 'Chưa cấu hình VITE_CONTRACT_ADDRESS cho frontend.';
   if (e?.message === 'NO_WALLET') return 'Chưa cài MetaMask. Hãy cài tiện ích MetaMask rồi tải lại trang.';
   if (e?.code === 'ACTION_REJECTED' || e?.code === 4001 || e?.info?.error?.code === 4001) return 'Bạn đã hủy thao tác trên ví.';
   if (e?.code === 'INSUFFICIENT_FUNDS' || /insufficient funds/i.test(e?.message)) return 'Số dư ví không đủ để trả tiền hàng và phí gas.';

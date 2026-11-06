@@ -4,10 +4,10 @@ Người mua khóa ETH vào hợp đồng thông minh, người bán chỉ nhậ
 Có tranh chấp thì Admin phân xử; người mua "im lặng" quá hạn thì người bán được tự rút.
 
 ```
-contracts/EscrowMarketplace.sol   Hợp đồng (1 hợp đồng – nhiều đơn hàng)
-test/run.mjs                      12 kịch bản kiểm thử (biên dịch + chạy trên chuỗi ganache)
-EscrowABI.json                    ABI sinh ra từ lần biên dịch
-backend/                          API Node.js + TiDB (thêm/xóa sản phẩm có xác thực chữ ký ví Admin)
+smart_contracts/EscrowMarketplace.sol   Hợp đồng (1 hợp đồng – nhiều đơn hàng)
+smart_contracts/test/run.mjs      13 kịch bản kiểm thử (biên dịch + chạy trên chuỗi ganache)
+EscrowABI                         ABI sinh ra từ lần biên dịch
+backend/                          API Node.js + TiDB (thêm / sửa / xóa sản phẩm có xác thực chữ ký ví Admin)
 frontend/                         React + Vite + ethers v6
 screenshots/                      Ảnh giao diện chụp khi chạy thật trên chuỗi thử
 ```
@@ -21,17 +21,17 @@ screenshots/                      Ảnh giao diện chụp khi chạy thật tr�
 | `confirmDelivery(id)` | Người mua | **Chỉ khi đã `SHIPPED`**: giải ngân cho người bán → `COMPLETED` |
 | `cancelByBuyer(id)` | Người mua | **Chỉ khi còn `FUNDED`** (chưa gửi hàng): hủy đơn, lấy lại tiền → `REFUNDED` |
 | `refundBySeller(id)` | Người bán | Hủy đơn, hoàn tiền → `REFUNDED` |
-| `openDispute(id)` | Người mua / bán | Đóng băng đơn chờ phân xử → `DISPUTED` |
+| `openDispute(id)` | Người mua / bán | **Chỉ khi đã `SHIPPED`**: đóng băng đơn chờ phân xử → `DISPUTED` |
 | `resolveDispute(id, toSeller)` | Admin | Trả cho người bán hoặc hoàn người mua |
 | `claimAfterTimeout(id)` | Người bán | Đã gửi hàng + quá hạn mà người mua không phản hồi → rút tiền |
 
-Bảo mật: modifier phân quyền theo từng đơn, kiểm tra trạng thái, Checks‑Effects‑Interactions + khóa `nonReentrant`,
+Bảo mật: Admin (arbiter) không được là người mua/người bán của bất kỳ đơn nào; modifier phân quyền theo từng đơn, kiểm tra trạng thái, Checks‑Effects‑Interactions + khóa `nonReentrant`,
 `arbiter` và `autoReleasePeriod` là `immutable` (không ai sửa được sau khi deploy).
 
-**Chạy kiểm thử** (ở thư mục gốc): `npm i solc@0.8.24 ganache ethers@6 && node test/run.mjs`
+**Chạy kiểm thử**: `cd smart_contracts && npm install && npm test`
 
 **Deploy bằng Remix** (mạng Sepolia):
-1. Dán `EscrowMarketplace.sol` vào Remix, compiler 0.8.24, bật optimizer.
+1. Dán `smart_contracts/EscrowMarketplace.sol` vào Remix, compiler 0.8.24, bật optimizer.
 2. Deploy & Run → Environment *Injected Provider – MetaMask* (đang ở Sepolia).
 3. Tham số: `_arbiter` = địa chỉ ví Admin, `_autoReleasePeriod` = `259200` (3 ngày; khi demo có thể để `300` = 5 phút).
 4. Copy địa chỉ hợp đồng vào `VITE_CONTRACT_ADDRESS`. ABI đã có sẵn trong `frontend/src/EscrowABI.json`.
