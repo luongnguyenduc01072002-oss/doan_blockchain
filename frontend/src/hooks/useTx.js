@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useToast } from '../components/Toast';
+import { useToast, newToastId } from '../components/Toast';
 import { friendlyError, getWriteContract } from '../utils/config';
 
 /**
@@ -11,7 +11,7 @@ export default function useTx(onDone) {
   const [pendingKey, setPendingKey] = useState(null);
 
   const run = useCallback(async (key, { title, success }, call) => {
-    const id = crypto.randomUUID();
+    const id = newToastId();
     setPendingKey(key);
     try {
       show({ type: 'loading', title, message: 'Vui lòng xác nhận trên ví MetaMask…' }, id);
