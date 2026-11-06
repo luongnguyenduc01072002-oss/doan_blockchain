@@ -60,8 +60,12 @@ function OrderCard({ order, product, account, isAdmin, autoRelease, run, pending
   );
 
   const actions = [];
-  if (isBuyer && (order.status === 1 || order.status === 2)) {
+  // Người mua chỉ xác nhận được khi người bán ĐÃ gửi hàng (khớp require trong hợp đồng)
+  if (isBuyer && order.status === 2) {
     actions.push(act('confirm', { cls: 'btn--success', icon: <CheckCircle2 size={15} />, text: 'Đã nhận hàng', title: `Giải ngân đơn #${id}`, success: 'Đã chuyển tiền cho người bán' }, (c) => c.confirmDelivery(id)));
+  }
+  if (isBuyer && order.status === 1) {
+    actions.push(act('cancel', { cls: 'btn--ghost', icon: <Undo2 size={15} />, text: 'Hủy đơn & lấy lại tiền', title: `Hủy đơn #${id}`, success: 'Đã hủy đơn, tiền đã về ví của bạn' }, (c) => c.cancelByBuyer(id)));
   }
   if (isSeller && order.status === 1) {
     actions.push(act('ship', { cls: 'btn--primary', icon: <Truck size={15} />, text: 'Báo đã gửi hàng', title: `Cập nhật đơn #${id}`, success: 'Đã đánh dấu gửi hàng' }, (c) => c.markShipped(id)));
@@ -104,6 +108,12 @@ function OrderCard({ order, product, account, isAdmin, autoRelease, run, pending
         )}
       </dl>
 
+      {order.status === 1 && isBuyer && (
+        <p className="note note--info"><Truck size={15} /> Đang chờ người bán gửi hàng. Nút “Đã nhận hàng” sẽ hiện khi người bán báo đã gửi; trước đó bạn có thể hủy đơn để lấy lại tiền.</p>
+      )}
+      {order.status === 1 && isSeller && (
+        <p className="note note--info"><Truck size={15} /> Người mua đã khóa tiền. Hãy gửi hàng rồi bấm “Báo đã gửi hàng” để người mua xác nhận và bạn nhận tiền.</p>
+      )}
       {order.status === 2 && isBuyer && (
         <p className="note note--warn"><Clock size={15} /> Nếu bạn không xác nhận hoặc khiếu nại trong {fmtLeft(releaseAt - now)}, người bán được quyền rút tiền.</p>
       )}
