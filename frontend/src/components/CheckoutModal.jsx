@@ -38,7 +38,7 @@ export default function CheckoutModal({ product, onClose, onConfirm, busy }) {
           <li><b>2</b> Người bán gửi hàng và báo “đã gửi”.</li>
           <li><b>3</b> Bạn bấm “Đã nhận hàng” → tiền tự động chuyển cho người bán.</li>
         </ol>
-        <p className="note"><ShieldCheck size={16} /> Có vấn đề với hàng? Bạn có thể mở khiếu nại để Admin phân xử và lấy lại tiền.</p>
+        <p className="note"><ShieldCheck size={16} /> Người bán chưa gửi hàng thì bạn hủy được ngay và lấy lại tiền. Đã gửi mà hàng có vấn đề thì mở khiếu nại để Admin phân xử.</p>
 
         <button className="btn btn--primary btn--block btn--lg" onClick={onConfirm} disabled={busy}>
           {busy ? <><Loader2 size={18} className="spin" /> Đang xử lý…</> : <><Lock size={18} /> Khóa {formatEth(product.price)} ETH &amp; đặt hàng</>}

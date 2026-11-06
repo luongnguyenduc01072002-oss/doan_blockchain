@@ -3,6 +3,10 @@ import { CheckCircle2, XCircle, Info, Loader2, ExternalLink, X } from 'lucide-re
 import { txLink } from '../utils/config';
 
 const ToastContext = createContext(null);
+
+// Không dùng crypto.randomUUID(): hàm này chỉ có trên HTTPS/localhost, mở bằng IP LAN (http://192.168…) sẽ bị lỗi
+let seq = 0;
+export const newToastId = () => `t${Date.now()}-${++seq}`;
 const ICONS = { success: CheckCircle2, error: XCircle, info: Info, loading: Loader2 };
 
 /** Thông báo dạng thẻ góc màn hình — thay cho alert() chặn trang. */
@@ -11,7 +15,7 @@ export function ToastProvider({ children }) {
 
   const dismiss = useCallback((id) => setToasts((t) => t.filter((x) => x.id !== id)), []);
 
-  const show = useCallback((toast, id = crypto.randomUUID()) => {
+  const show = useCallback((toast, id = newToastId()) => {
     setToasts((t) => [...t.filter((x) => x.id !== id), { ...toast, id }]);
     if (toast.type !== 'loading') setTimeout(() => dismiss(id), toast.type === 'error' ? 7000 : 4500);
     return id;

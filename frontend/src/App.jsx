@@ -105,7 +105,7 @@ export default function App() {
   // ---------- Phân loại đơn theo vai trò ----------
   const mine = useMemo(() => orders.filter((o) => o.buyer.toLowerCase() === account || o.seller.toLowerCase() === account), [orders, account]);
   const disputes = orders.filter((o) => o.status === 3);
-  const needAction = (o) => (o.buyer.toLowerCase() === account && [1, 2].includes(o.status)) || (o.seller.toLowerCase() === account && o.status === 1);
+  const needAction = (o) => (o.buyer.toLowerCase() === account && o.status === 2) || (o.seller.toLowerCase() === account && o.status === 1);
   const orderProps = { products, account, isAdmin, autoRelease, run, pendingKey };
 
   return (

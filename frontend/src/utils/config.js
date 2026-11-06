@@ -67,6 +67,7 @@ export const addrLink = (addr) => `${EXPLORER}/address/${addr}`;
 
 /** Dịch lỗi ví / hợp đồng sang câu dễ hiểu cho người dùng. */
 export const friendlyError = (e) => {
+  if (e instanceof TypeError && /fetch/i.test(e.message)) return 'Không gọi được máy chủ API. Máy chủ Render có thể đang khởi động (chờ ~30 giây) hoặc biến FRONTEND_ORIGIN trên Render chưa đúng domain frontend.';
   if (e?.message === 'NO_WALLET') return 'Chưa cài MetaMask. Hãy cài tiện ích MetaMask rồi tải lại trang.';
   if (e?.code === 'ACTION_REJECTED' || e?.code === 4001 || e?.info?.error?.code === 4001) return 'Bạn đã hủy thao tác trên ví.';
   if (e?.code === 'INSUFFICIENT_FUNDS' || /insufficient funds/i.test(e?.message)) return 'Số dư ví không đủ để trả tiền hàng và phí gas.';
