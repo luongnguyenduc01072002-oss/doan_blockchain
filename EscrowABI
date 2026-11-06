@@ -193,6 +193,19 @@
         "type": "uint256"
       }
     ],
+    "name": "cancelByBuyer",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      {
+        "internalType": "uint256",
+        "name": "orderId",
+        "type": "uint256"
+      }
+    ],
     "name": "claimAfterTimeout",
     "outputs": [],
     "stateMutability": "nonpayable",
