@@ -4,6 +4,8 @@ import { Wallet, AlertTriangle } from 'lucide-react';
 import { API_URL, ADMIN_ADDRESS, CONTRACT_ADDRESS, CHAIN_NAME, getReadContracts, friendlyError } from './utils/config';
 import useWallet from './hooks/useWallet';
 import useTx from './hooks/useTx';
+import useSession from './hooks/useSession';
+import { api } from './utils/chatApi';
 import { useToast } from './components/Toast';
 import Header from './components/Header';
 import Hero from './components/Hero';
@@ -11,6 +13,8 @@ import ProductGrid from './components/ProductGrid';
 import CheckoutModal from './components/CheckoutModal';
 import OrderList from './components/OrderList';
 import AdminPanel from './components/AdminPanel';
+import OrderChat from './components/OrderChat';
+import DisputeModal from './components/DisputeModal';
 import './App.css';
 
 export default function App() {
@@ -27,6 +31,15 @@ export default function App() {
   const [stats, setStats] = useState({ locked: '0', orders: 0, completed: 0 });
   const [autoRelease, setAutoRelease] = useState(0);
   const [buying, setBuying] = useState(null);
+
+  // ---------- Trao đổi theo đơn (off-chain, backend/chat.js) ----------
+  const session = useSession(account);
+  const [threads, setThreads] = useState({});       // orderId -> { unread, disputed, total }
+  const [chatId, setChatId] = useState(null);        // đơn đang mở khung trao đổi
+  const [chatDraft, setChatDraft] = useState(null);
+  const [disputeOrder, setDisputeOrder] = useState(null);
+  const [disputeStep, setDisputeStep] = useState(null); // sign | tx | post
+  const seenUnread = useRef({});
 
   // ---------- Dữ liệu off-chain: sản phẩm từ API Node.js + TiDB ----------
   const fetchProducts = useCallback(async () => {
@@ -80,6 +93,33 @@ export default function App() {
     if (req === chainReq.current) { setChainError(true); setOrdersLoading(false); }
   }, []);
 
+  const chatIdRef = useRef(null);
+  chatIdRef.current = chatId;
+  const fetchThreads = useCallback(async () => {
+    if (!session.token) { setThreads({}); return; }
+    try {
+      const list = await api('/api/threads', { token: session.token });
+      const map = Object.fromEntries(list.map((t) => [t.orderId, t]));
+      // Báo tin mới (trừ đơn đang mở khung trao đổi)
+      for (const t of list) {
+        const before = seenUnread.current[t.orderId] ?? t.unread;
+        if (t.unread > before && t.orderId !== chatIdRef.current) {
+          show({ type: 'info', title: `Tin nhắn mới ở đơn #${t.orderId}`, message: 'Mở “Đơn hàng của tôi” → “Trao đổi” để xem.' });
+        }
+        seenUnread.current[t.orderId] = t.unread;
+      }
+      setThreads(map);
+    } catch (e) {
+      if (e.code === 'SESSION') session.clear();
+    }
+  }, [session, show]);
+  useEffect(() => {
+    seenUnread.current = {};
+    fetchThreads();
+    const t = setInterval(() => document.visibilityState === 'visible' && fetchThreads(), 15000);
+    return () => clearInterval(t);
+  }, [fetchThreads]);
+
   useEffect(() => { fetchProducts(); }, [fetchProducts]);
   useEffect(() => {
     fetchChain();
@@ -102,6 +142,8 @@ export default function App() {
     try { await wallet.switchAccount(); } catch (e) { show({ type: 'error', title: 'Không đổi được tài khoản', message: friendlyError(e) }); }
   };
   const disconnect = async () => {
+    session.clear();
+    setChatId(null);
     await wallet.disconnect();
     setBuying(null);
     if (tab !== 'shop') setTab('shop');
@@ -128,11 +170,51 @@ export default function App() {
     if (ok) { setBuying(null); setTab('orders'); }
   };
 
+  // ---------- Khiếu nại: ký mở hộp thư -> giao dịch openDispute -> gửi lý do cho Admin ----------
+  const submitDispute = async ({ body, attachment_url }) => {
+    const o = disputeOrder;
+    let token;
+    try {
+      setDisputeStep('sign');
+      token = await session.ensure();
+    } catch (e) {
+      setDisputeStep(null);
+      show({ type: 'error', title: 'Chưa mở được hộp thư', message: friendlyError(e) });
+      return;
+    }
+    setDisputeStep('tx');
+    const ok = await run(`dispute-${o.id}`, { title: `Khiếu nại đơn #${o.id}`, success: 'Đã ghi khiếu nại lên hợp đồng, tiền đang được đóng băng' },
+      (c) => c.openDispute(o.id));
+    if (!ok) { setDisputeStep(null); return; }
+
+    setDisputeStep('post');
+    let sent = false;
+    for (let i = 0; i < 5 && !sent; i++) {
+      try {
+        await api(`/api/orders/${o.id}/messages`, { token, method: 'POST', body: { kind: 'dispute', body, attachment_url } });
+        sent = true;
+      } catch (e) {
+        // RPC của server có thể chậm hơn ví 1 khối -> chờ rồi thử lại
+        if (e.code === 'NOT_DISPUTED' && i < 4) await new Promise((r) => setTimeout(r, 3000));
+        else { show({ type: 'error', title: 'Đã khiếu nại nhưng chưa gửi được lý do', message: `${friendlyError(e)} Lý do đã được điền sẵn trong khung trao đổi, bấm Gửi lại.` }); break; }
+      }
+    }
+    setDisputeStep(null);
+    setDisputeOrder(null);
+    setChatDraft(sent ? null : { kind: 'dispute', body });
+    setChatId(o.id);
+    fetchThreads();
+  };
+
   // ---------- Phân loại đơn theo vai trò ----------
   const mine = useMemo(() => orders.filter((o) => o.buyer.toLowerCase() === account || o.seller.toLowerCase() === account), [orders, account]);
   const disputes = orders.filter((o) => o.status === 3);
-  const needAction = (o) => (o.buyer.toLowerCase() === account && o.status === 2) || (o.seller.toLowerCase() === account && o.status === 1);
-  const orderProps = { products, account, isAdmin, autoRelease, run, pendingKey };
+  const needAction = (o) => (o.buyer.toLowerCase() === account && o.status === 2) || (o.seller.toLowerCase() === account && o.status === 1)
+    || (threads[o.id]?.unread > 0);
+  const openChat = useCallback((o) => { setChatDraft(null); setChatId(o.id); }, []);
+  const orderProps = { products, account, isAdmin, autoRelease, run, pendingKey, threads, onChat: openChat, onDispute: setDisputeOrder };
+  const chatOrder = orders.find((o) => o.id === chatId);  // lấy từ danh sách on-chain để trạng thái luôn mới
+  const disputeRole = disputeOrder && (disputeOrder.seller.toLowerCase() === account ? 'seller' : 'buyer');
 
   return (
     <>
@@ -202,6 +284,12 @@ export default function App() {
         <span className="muted">Solidity · React · ethers.js · Node.js · TiDB Cloud</span>
       </footer>
 
+      {chatOrder && (
+        <OrderChat key={`${chatOrder.id}-${account}`} order={chatOrder} product={products.find((p) => Number(p.id) === chatOrder.productId)}
+          account={account} session={session} draft={chatDraft} onClose={() => setChatId(null)} onRead={fetchThreads} />
+      )}
+      <DisputeModal key={disputeOrder?.id} order={disputeOrder} role={disputeRole} step={disputeStep}
+        onClose={() => setDisputeOrder(null)} onSubmit={submitDispute} />
       <CheckoutModal product={buying} autoRelease={autoRelease} busy={pendingKey === 'buy'} onClose={() => setBuying(null)} onConfirm={confirmBuy} />
     </>
   );
