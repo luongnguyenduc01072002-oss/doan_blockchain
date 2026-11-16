@@ -8,6 +8,8 @@ smart_contracts/EscrowMarketplace.sol   Hợp đồng (1 hợp đồng – nhi�
 smart_contracts/test/run.mjs      13 kịch bản kiểm thử (biên dịch + chạy trên chuỗi ganache)
 EscrowABI                         ABI sinh ra từ lần biên dịch
 backend/                          API Node.js + TiDB (thêm / sửa / xóa sản phẩm có xác thực chữ ký ví Admin)
+backend/chat.js                   Trao đổi theo đơn hàng: người mua ↔ người bán ↔ Admin khi khiếu nại
+backend/test/chat-api.test.cjs    14 kịch bản kiểm thử phân quyền trao đổi (ganache + MySQL thật)
 frontend/                         React + Vite + ethers v6
 screenshots/                      Ảnh giao diện chụp khi chạy thật trên chuỗi thử
 ```
@@ -49,6 +51,32 @@ Bảng `products` được **tự tạo / tự nâng cấp khi server khởi đ�
 Nếu đăng sản phẩm không hiện, mở **Logs** trên Render: server in rõ lỗi CSDL, CORS bị chặn hoặc thiếu `ADMIN_ADDRESS`.
 Trên Render: thêm các biến môi trường như `.env.example`, start command `node server.js`.
 
+### Trao đổi theo đơn hàng (người mua ↔ người bán ↔ Admin)
+
+Mỗi đơn có một khung **Trao đổi**: người mua gửi *địa chỉ nhận hàng*, người bán gửi *mã vận đơn*. Khi khiếu nại,
+người dùng phải ghi **lý do + link bằng chứng**, và Admin đọc được toàn bộ trao đổi của đơn đó để phân xử.
+
+| | Người mua / người bán của đơn | Admin | Người khác |
+|---|---|---|---|
+| Xem tin | Luôn được | Chỉ khi đơn **đang hoặc đã từng tranh chấp** | Không |
+| Gửi tin | Khi đơn chưa kết thúc | Chỉ khi đơn **đang** tranh chấp | Không |
+
+- **Đăng nhập bằng ví**: server phát mã nonce dùng 1 lần → người dùng ký bằng MetaMask (không tốn gas) → server
+  khôi phục địa chỉ từ chữ ký và cấp phiên 24 giờ (token HMAC). Chữ ký cũ không dùng lại được.
+- **Không tin frontend**: quyền xem/gửi được server quyết định bằng cách **đọc `getOrder` trên hợp đồng** (ai là người mua,
+  người bán, trạng thái hiện tại). Tin "lý do khiếu nại" chỉ được nhận khi hợp đồng đã ở trạng thái `DISPUTED`.
+- **Vì sao lưu off-chain**: tin nhắn chứa họ tên, số điện thoại, địa chỉ; ghi lên blockchain thì công khai vĩnh viễn và tốn gas.
+  Tiền và trạng thái đơn vẫn nằm hoàn toàn trên hợp đồng; hợp đồng **không cần deploy lại**.
+- Có đếm tin chưa đọc theo đơn, thông báo khi có tin mới, giới hạn 20 tin/phút mỗi ví, link đính kèm chỉ nhận http(s).
+
+Biến môi trường thêm cho backend: `CONTRACT_ADDRESS`, `RPC_URL`, `SESSION_SECRET` (xem `.env.example`).
+
+**Kiểm thử trao đổi**: cần `cd smart_contracts && npm install` và một MySQL/MariaDB cục bộ có database tên chứa chữ `test`:
+```bash
+cd backend
+TEST_DB_USER=app TEST_DB_PASSWORD=app TEST_DB_NAME=escrow_test npm run test:chat
+```
+
 ## 3. Frontend
 
 ```bash
@@ -65,11 +93,13 @@ npm run dev
 2. Ví Người mua → *Mua ngay* → khóa ETH. Hero hiển thị số ETH đang giữ tăng lên.
 3. Ví Người bán → *Đơn hàng của tôi* → *Báo đã gửi hàng*.
 4. Ví Người mua → *Đã nhận hàng* → mở Etherscan cho thấy ETH chuyển từ hợp đồng sang người bán.
-5. Đơn thứ hai: người mua *Khiếu nại* → ví Admin *Hoàn cho người mua*.
-6. (Nếu `_autoReleasePeriod = 300`) Người bán gửi hàng, chờ 5 phút, *Rút tiền (quá hạn)*.
+5. Ở đơn đầu, trước khi gửi hàng: người mua bấm *Trao đổi* → ký mở hộp thư → gửi *Địa chỉ nhận hàng*; người bán thấy số tin mới, trả lời bằng *Mã vận đơn*.
+6. Đơn thứ hai: người mua *Khiếu nại* → chọn lý do, mô tả, dán link ảnh → ví Admin vào *Quản trị* → *Xem khiếu nại & trao đổi* → nhắn hai bên → *Hoàn cho người mua*.
+7. (Nếu `_autoReleasePeriod = 300`) Người bán gửi hàng, chờ 5 phút, *Rút tiền (quá hạn)*.
 
 ## 5. Giới hạn đã biết (nên nêu trong báo cáo)
 
 - Giá sản phẩm lưu off-chain nên hợp đồng không tự kiểm tra người mua trả đúng giá; người bán thấy số tiền đã khóa trước khi gửi hàng.
 - Admin là một ví duy nhất (điểm tin cậy tập trung) — hướng mở rộng: multisig hoặc hội đồng phân xử.
 - Xác thực "đã nhận hàng" dựa vào người mua; chưa tích hợp đơn vị vận chuyển (oracle).
+- Tin nhắn trao đổi lưu trên máy chủ (off-chain), nên phụ thuộc vào backend; hướng mở rộng: lưu hash của bộ bằng chứng lên chuỗi khi khiếu nại để chứng minh không bị sửa.
