@@ -3,6 +3,7 @@ const mysql = require('mysql2/promise');
 const cors = require('cors');
 const { ethers } = require('ethers');
 require('dotenv').config();
+const { registerChat, ensureChatSchema } = require('./chat');
 
 const app = express();
 
@@ -68,7 +69,8 @@ db.getConnection()
         conn.release();
         console.log('✅ Đã kết nối CSDL TiDB Cloud');
         await ensureSchema();
-        console.log('✅ Bảng products sẵn sàng');
+        await ensureChatSchema(db);
+        console.log('✅ Bảng products + bảng trao đổi đơn hàng sẵn sàng');
     })
     .catch(err => console.error('❌ Lỗi CSDL khi khởi động:', err.code || '', err.message));
 if (!ADMIN_ADDRESS) console.warn('⚠️  Chưa đặt ADMIN_ADDRESS: sẽ không đăng được sản phẩm.');
@@ -113,7 +115,15 @@ const validateProduct = ({ name, price, image_url, seller_address, description }
     return null;
 };
 
-app.get('/api/health', (req, res) => res.json({ ok: true }));
+app.get('/api/health', (req, res) => res.json({ ok: true, chat: !!process.env.CONTRACT_ADDRESS }));
+
+// Trao đổi người mua ↔ người bán ↔ Admin theo từng đơn (xem chat.js)
+registerChat(app, db, {
+    adminAddress: ADMIN_ADDRESS,
+    contractAddress: process.env.CONTRACT_ADDRESS,
+    rpcUrl: process.env.RPC_URL || 'https://ethereum-sepolia-rpc.publicnode.com',
+    sessionSecret: process.env.SESSION_SECRET,
+});
 
 app.get('/api/products', async (req, res) => {
     const [rows] = await db.query('SELECT * FROM products ORDER BY id DESC');
@@ -165,7 +175,12 @@ const DB_ERRORS = {
     ER_ACCESS_DENIED_ERROR: 'Sai tài khoản hoặc mật khẩu CSDL (DB_USER / DB_PASSWORD).',
 };
 app.use((err, req, res, next) => {
+    if (err.status && err.status < 500 || err.status === 503) return res.status(err.status).json({ error: err.message });
     console.error(`❌ ${req.method} ${req.path}:`, err.code || '', err.message);
+    // Lỗi đọc blockchain (RPC chậm / sập) -> 502 thay vì báo nhầm là lỗi CSDL
+    if (err.code === 'CALL_EXCEPTION' || err.code === 'NETWORK_ERROR' || err.code === 'SERVER_ERROR' || err.code === 'TIMEOUT') {
+        return res.status(502).json({ error: 'Không đọc được hợp đồng trên blockchain (RPC lỗi), thử lại sau ít giây', code: err.code });
+    }
     res.status(500).json({ error: DB_ERRORS[err.code] || `Lỗi máy chủ${err.code ? ` (${err.code})` : ''}`, code: err.code });
 });
 

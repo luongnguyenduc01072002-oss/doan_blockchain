@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Store, Truck, CheckCircle2, Undo2, Gavel, Clock, Loader2, Wallet, Lock } from 'lucide-react';
+import { Store, Truck, CheckCircle2, Undo2, Gavel, Clock, Loader2, Wallet, Lock, MessageSquare } from 'lucide-react';
 import { STATUS, formatEth, shortAddr, addrLink } from '../utils/config';
 import { ProductImage } from './ProductGrid';
 
@@ -41,7 +41,7 @@ function Timeline({ order }) {
   );
 }
 
-function OrderCard({ order, product, account, isAdmin, autoRelease, run, pendingKey }) {
+function OrderCard({ order, product, account, isAdmin, autoRelease, run, pendingKey, thread, onChat, onDispute }) {
   const now = useNow();
   const st = STATUS[order.status];
   const isBuyer = account === order.buyer.toLowerCase();
@@ -77,11 +77,28 @@ function OrderCard({ order, product, account, isAdmin, autoRelease, run, pending
     actions.push(act('refund', { cls: 'btn--ghost', icon: <Undo2 size={15} />, text: 'Hủy & hoàn tiền', title: `Hoàn tiền đơn #${id}`, success: 'Đã hoàn tiền cho người mua' }, (c) => c.refundBySeller(id)));
   }
   if ((isBuyer || isSeller) && order.status === 2) { // hợp đồng chỉ cho khiếu nại sau khi đã gửi hàng
-    actions.push(act('dispute', { cls: 'btn--danger-ghost', icon: <Gavel size={15} />, text: 'Khiếu nại', title: `Mở tranh chấp đơn #${id}`, success: 'Đã gửi khiếu nại tới Admin' }, (c) => c.openDispute(id)));
+    // Mở hộp thoại để ghi lý do + bằng chứng, rồi mới gửi giao dịch openDispute (xem App.jsx)
+    actions.push(
+      <button key="dispute" className="btn btn--sm btn--danger-ghost" disabled={!!pendingKey} onClick={() => onDispute(order)}>
+        {pendingKey === `dispute-${id}` ? <Loader2 size={15} className="spin" /> : <Gavel size={15} />} Khiếu nại
+      </button>
+    );
   }
   if (isAdmin && order.status === 3) {
     actions.push(act('toSeller', { cls: 'btn--success', icon: <Store size={15} />, text: 'Xử cho người bán', title: `Phân xử đơn #${id}`, success: 'Đã giải ngân cho người bán' }, (c) => c.resolveDispute(id, true)));
     actions.push(act('toBuyer', { cls: 'btn--danger', icon: <Undo2 size={15} />, text: 'Hoàn cho người mua', title: `Phân xử đơn #${id}`, success: 'Đã hoàn tiền cho người mua' }, (c) => c.resolveDispute(id, false)));
+  }
+
+  // Trao đổi: người mua / người bán luôn mở được; Admin chỉ khi đơn đang hoặc đã từng tranh chấp
+  const unread = thread?.unread || 0;
+  const canChat = isBuyer || isSeller || (isAdmin && (order.status === 3 || thread?.disputed));
+  if (canChat) {
+    actions.unshift(
+      <button key="chat" className={`btn btn--sm ${unread ? 'btn--chat-new' : 'btn--ghost'}`} onClick={() => onChat(order)}>
+        <MessageSquare size={15} /> {isAdmin && !isBuyer && !isSeller ? 'Xem khiếu nại & trao đổi' : 'Trao đổi'}
+        {unread > 0 && <span className="btn__badge">{unread}</span>}
+      </button>
+    );
   }
 
   return (
@@ -118,13 +135,19 @@ function OrderCard({ order, product, account, isAdmin, autoRelease, run, pending
         <p className="note note--warn"><Clock size={15} /> Nếu bạn không xác nhận hoặc khiếu nại trong {fmtLeft(releaseAt - now)}, người bán được quyền rút tiền.</p>
       )}
 
+      {order.status === 3 && (
+        <p className="note note--dispute"><Gavel size={15} /> {isAdmin && !isBuyer && !isSeller
+          ? 'Đọc lý do khiếu nại và bằng chứng của hai bên trong khung trao đổi trước khi phân xử.'
+          : 'Đơn đang tranh chấp, tiền bị đóng băng chờ Admin phân xử. Gửi thêm bằng chứng cho Admin trong khung “Trao đổi”.'}</p>
+      )}
+
       {actions.length > 0 && <div className="order__actions">{actions}</div>}
     </article>
   );
 }
 
 
-export default function OrderList({ title, subtitle, orders, products, account, isAdmin, autoRelease, run, pendingKey, filters, emptyText, loading }) {
+export default function OrderList({ title, subtitle, orders, products, account, isAdmin, autoRelease, run, pendingKey, filters, emptyText, loading, threads, onChat, onDispute }) {
   const [filter, setFilter] = useState(filters?.[0]?.key);
   const active = filters?.find((f) => f.key === filter);
   const list = active ? orders.filter(active.test) : orders;
@@ -155,7 +178,8 @@ export default function OrderList({ title, subtitle, orders, products, account, 
         <div className="orders">
           {list.map((o) => (
             <OrderCard key={o.id} order={o} product={products.find((p) => Number(p.id) === o.productId)}
-              account={account} isAdmin={isAdmin} autoRelease={autoRelease} run={run} pendingKey={pendingKey} />
+              account={account} isAdmin={isAdmin} autoRelease={autoRelease} run={run} pendingKey={pendingKey}
+              thread={threads?.[o.id]} onChat={onChat} onDispute={onDispute} />
           ))}
         </div>
       )}
